@@ -444,8 +444,16 @@ def post_agent_simulate(payload: AgentSimulationRequest) -> Dict[str, Any]:
 
 
 # ============================================================================
-# Static Frontend Serving (`frontend/dist` with fallback to `frontend/`)
+# Standalone Kae & Conner Studio Serving (`/studio` -> `studio/dist`)
+# & Public Consumer Frontend Serving (`/` -> `frontend/dist`)
 # ============================================================================
+
+
+def _resolve_studio_root() -> Path:
+    dist_dir = ROOT_DIR / "studio" / "dist"
+    if dist_dir.exists() and (dist_dir / "index.html").exists():
+        return dist_dir
+    return ROOT_DIR / "studio"
 
 
 def _resolve_frontend_root() -> Path:
@@ -455,12 +463,43 @@ def _resolve_frontend_root() -> Path:
     return ROOT_DIR / "frontend"
 
 
+@app.get("/studio", include_in_schema=False)
+@app.get("/studio/", include_in_schema=False)
+@app.get("/studio/{rel_path:path}", include_in_schema=False)
+def serve_studio_spa(rel_path: str = ""):
+    studio_root = _resolve_studio_root().resolve()
+    clean_rel = rel_path.lstrip("/")
+    if not clean_rel:
+        target = studio_root / "index.html"
+    else:
+        target = (studio_root / clean_rel).resolve()
+        if not str(target).startswith(str(studio_root)):
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    if not target.exists() or not target.is_file():
+        target = studio_root / "index.html"
+
+    if not target.exists():
+        return JSONResponse(
+            status_code=200,
+            content={"status": "Aura Studio Building", "note": "Run pnpm build in studio/"},
+        )
+
+    mime_type, _ = mimetypes.guess_type(str(target))
+    return FileResponse(
+        path=str(target),
+        media_type=mime_type or "application/octet-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/{full_path:path}", include_in_schema=False)
 def serve_spa(full_path: str):
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail=f"Unknown API endpoint: /{full_path}")
 
     frontend_root = _resolve_frontend_root().resolve()
+    studio_root = _resolve_studio_root().resolve()
     rel = full_path.lstrip("/")
     if not rel:
         target = frontend_root / "index.html"
@@ -468,6 +507,11 @@ def serve_spa(full_path: str):
         target = (frontend_root / rel).resolve()
         if not str(target).startswith(str(frontend_root)):
             raise HTTPException(status_code=403, detail="Forbidden")
+        # If an asset was requested from /studio (without trailing slash), check studio_root/assets as fallback
+        if (not target.exists() or not target.is_file()) and rel.startswith("assets/"):
+            studio_asset = (studio_root / rel).resolve()
+            if str(studio_asset).startswith(str(studio_root)) and studio_asset.exists() and studio_asset.is_file():
+                target = studio_asset
 
     if not target.exists() or not target.is_file():
         target = frontend_root / "index.html"

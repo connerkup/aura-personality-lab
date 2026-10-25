@@ -107,11 +107,13 @@ class StudioQuestionUpsertRequest(BaseModel):
 class StudioBranchRule(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    if_question_id: int = Field(..., description="Source question ID to inspect.")
+    if_question_id: int = Field(default=3, description="Source question ID to inspect.")
     operator: str = Field(default=">=", description="Comparison operator: '>=', '<=', '==', '>', '<'.")
     threshold: float = Field(default=4.0, description="Likert threshold (1..5) that triggers the branch.")
-    then_inject_question_id: int = Field(..., description="Question ID to dynamically inject when triggered.")
+    then_inject_question_id: Optional[int] = Field(default=13, description="Question ID to dynamically inject when triggered.")
+    then_goto_question_id: Optional[int] = Field(default=None, description="Alias for target question ID.")
     note: str = Field(default="", description="Human-readable explanation of why this branch triggers.")
+    rationale: Optional[str] = Field(default=None, description="Alias for scientific rationale.")
 
 
 class StudioFlowUpsertRequest(BaseModel):

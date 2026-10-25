@@ -1,13 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MoreAndLabView } from './components/MoreAndLabView';
-import { AuraMicroGamesBridge, useTelemetryState } from './components/MindMoments';
+import {
+  AuraMicroGamesBridge,
+  MIND_MOMENT_SLUGS,
+  useTelemetryState,
+} from './components/MindMoments';
 import { OrbitalSvg } from './components/OrbitalSvg';
 import { PortraitView } from './components/PortraitView';
-import { QuietReflection } from './components/QuietReflection';
+import {
+  QUESTION_SLUG_MAP,
+  QuietReflection,
+  getQuestionSlug,
+} from './components/QuietReflection';
 import { TogetherView } from './components/TogetherView';
 import {
   AURA_SCIENCE_BUNDLE,
-  INITIAL_SHADOW_CALIBRATION_MATRIX,
   INITIAL_STUDIO_FLOWS,
   PARTNER_PRESETS,
   SAMPLE_DEMO_RESPONSES,
@@ -18,46 +25,166 @@ import {
   DecompositionResult,
   DomainKey,
   ItemBankQuestion,
-  ShadowCalibrationRow,
   StudioFlow,
   TelemetryState,
 } from './types/aura';
 
 type MainTab = 'test' | 'blueprint' | 'chemistry' | 'pro';
 
+const STORAGE_KEY = 'aura_consumer_progress_v1';
+
+interface PersistedConsumerProgress {
+  userName?: string;
+  responses?: Record<number, number>;
+  telemetry?: TelemetryState;
+  currentStepSlug?: string;
+  includeSneakyBonus?: boolean;
+  userMaskId?: string;
+}
+
+function loadSavedProgress(): PersistedConsumerProgress | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as PersistedConsumerProgress;
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+  return null;
+}
+
+function saveProgressToStorage(data: PersistedConsumerProgress) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
+function clearSavedProgress() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore storage clear errors
+  }
+}
+
+function tabToViewParam(tab: MainTab): string {
+  if (tab === 'blueprint') return 'portrait';
+  if (tab === 'chemistry') return 'together';
+  if (tab === 'pro') return 'guides';
+  return 'reflect';
+}
+
+function viewParamToTab(viewParam: string | null): MainTab | null {
+  if (!viewParam) return null;
+  const v = viewParam.toLowerCase();
+  if (v === 'reflect' || v === 'test') return 'test';
+  if (v === 'portrait' || v === 'blueprint') return 'blueprint';
+  if (v === 'together' || v === 'chemistry') return 'chemistry';
+  if (v === 'guides' || v === 'pro' || v === 'more') return 'pro';
+  return null;
+}
+
 export const App: React.FC = () => {
-  // Check URL for direct studio route (?studio=1 or /studio)
-  const isDirectStudioUrl = useMemo(() => {
-    if (typeof window === 'undefined') return false;
+  const initialUrlState = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return {
+        hasExplicitRoute: false,
+        initialTab: 'test' as MainTab,
+        initialStepSlug: QUESTION_SLUG_MAP[1],
+        initialPart: 'questions' as 'questions' | 'moments',
+      };
+    }
     const params = new URLSearchParams(window.location.search);
-    return (
-      params.get('studio') === '1' ||
-      params.get('studio') === 'true' ||
-      window.location.pathname.endsWith('/studio')
+    const viewParam = params.get('view');
+    const stepParam = params.get('step');
+    const tabFromView = viewParamToTab(viewParam);
+
+    const isMomentSlug =
+      stepParam === MIND_MOMENT_SLUGS[0] ||
+      stepParam === MIND_MOMENT_SLUGS[1] ||
+      stepParam === MIND_MOMENT_SLUGS[2];
+
+    const hasExplicitRoute = Boolean(
+      tabFromView || stepParam || params.get('u') || params.get('s')
     );
+
+    return {
+      hasExplicitRoute,
+      initialTab: tabFromView || 'test',
+      initialStepSlug: stepParam || QUESTION_SLUG_MAP[1],
+      initialPart: (isMomentSlug ? 'moments' : 'questions') as 'questions' | 'moments',
+    };
   }, []);
 
+  const savedProgress = useMemo(() => loadSavedProgress(), []);
+
+  // Hydrate telemetry bridge if saved progress exists
+  useEffect(() => {
+    if (savedProgress?.telemetry) {
+      AuraMicroGamesBridge.setState(savedProgress.telemetry);
+    }
+  }, [savedProgress]);
+
   // Welcome & Loader Modal State
-  const [welcomeVisible, setWelcomeVisible] = useState<boolean>(!isDirectStudioUrl);
+  // Show welcome screen on fresh root visit unless deep-linked to a specific step/view beyond q-01
+  const [welcomeVisible, setWelcomeVisible] = useState<boolean>(() => {
+    if (
+      initialUrlState.initialTab !== 'test' ||
+      (initialUrlState.hasExplicitRoute &&
+        initialUrlState.initialStepSlug !== QUESTION_SLUG_MAP[1])
+    ) {
+      return false;
+    }
+    return true;
+  });
   const [welcomeInputName, setWelcomeInputName] = useState<string>('');
   const [welcomeTwText, setWelcomeTwText] = useState<string>('');
   const [loaderVisible, setLoaderVisible] = useState<boolean>(false);
   const [loaderMsg, setLoaderMsg] = useState<string>('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<MainTab>(
-    isDirectStudioUrl ? 'pro' : 'test'
+  // Navigation & URL Slug State
+  const [activeTab, setActiveTab] = useState<MainTab>(initialUrlState.initialTab);
+  const [reflectPart, setReflectPart] = useState<'questions' | 'moments'>(
+    initialUrlState.initialPart
   );
-  const [reflectPart, setReflectPart] = useState<'questions' | 'moments'>('questions');
-  const [proSubTab, setProSubTab] = useState<'pricing' | 'lab'>(
-    isDirectStudioUrl ? 'lab' : 'pricing'
-  );
+  const [currentStepSlug, setCurrentStepSlug] = useState<string>(() => {
+    if (initialUrlState.hasExplicitRoute && initialUrlState.initialStepSlug) {
+      return initialUrlState.initialStepSlug;
+    }
+    return savedProgress?.currentStepSlug || QUESTION_SLUG_MAP[1];
+  });
+  const [includeSneakyBonus, setIncludeSneakyBonus] = useState<boolean>(() => {
+    return Boolean(savedProgress?.includeSneakyBonus);
+  });
 
-  // User Reflection State (MUST start completely empty `{}`!)
-  const [userName, setUserName] = useState<string>('Alex');
-  const [responses, setResponses] = useState<Record<number, number>>({});
-  const [currentQIdx, setCurrentQIdx] = useState<number>(0);
+  // User Reflection State (MUST start completely empty `{}` on a fresh session!)
+  const [userName, setUserName] = useState<string>(() => savedProgress?.userName || 'Alex');
+  const [responses, setResponses] = useState<Record<number, number>>(() => {
+    if (savedProgress?.responses && typeof savedProgress.responses === 'object') {
+      return savedProgress.responses;
+    }
+    return {};
+  });
+  const [currentQIdx, setCurrentQIdx] = useState<number>(() => {
+    const slugToMatch =
+      (initialUrlState.hasExplicitRoute && initialUrlState.initialStepSlug) ||
+      savedProgress?.currentStepSlug ||
+      QUESTION_SLUG_MAP[1];
+    const entry = Object.entries(QUESTION_SLUG_MAP).find(([, s]) => s === slugToMatch);
+    if (entry) {
+      return Math.max(0, Number(entry[0]) - 1);
+    }
+    return 0;
+  });
   const [userRawScores, setUserRawScores] = useState<Record<DomainKey, number>>({
     O: 84.0,
     C: 38.0,
@@ -65,7 +192,7 @@ export const App: React.FC = () => {
     A: 76.0,
     N: 62.0,
   });
-  const [userMaskId, setUserMaskId] = useState<string>('auto');
+  const [userMaskId, setUserMaskId] = useState<string>(() => savedProgress?.userMaskId || 'auto');
   const [proUnlocked, setProUnlocked] = useState<boolean>(false);
   const [decomposition, setDecomposition] = useState<DecompositionResult | null>(null);
 
@@ -83,15 +210,12 @@ export const App: React.FC = () => {
   const [activeSliderTarget, setActiveSliderTarget] = useState<'user' | 'partner'>('user');
   const [chemistry, setChemistry] = useState<ChemistryResult | null>(null);
 
-  // Studio / Questions & Flows State
+  // Questions & Flows State (synced from backend active flow)
   const [studioQuestions, setStudioQuestions] = useState<ItemBankQuestion[]>(
     () => AURA_SCIENCE_BUNDLE.item_bank_schema.items
   );
   const [studioFlows, setStudioFlows] = useState<StudioFlow[]>(() => INITIAL_STUDIO_FLOWS);
   const [activeFlowId, setActiveFlowId] = useState<string>('core_calm_12');
-  const [shadowMatrix, setShadowMatrix] = useState<ShadowCalibrationRow[]>(
-    () => INITIAL_SHADOW_CALIBRATION_MATRIX
-  );
 
   const telemetry = useTelemetryState();
   const toastTimerRef = useRef<number | null>(null);
@@ -105,6 +229,84 @@ export const App: React.FC = () => {
       setToastMsg(null);
     }, 2600);
   }, []);
+
+  // Sync URL query parameters (?view=...&step=...) with browser history
+  const syncUrlHistory = useCallback(
+    (tab: MainTab, stepSlug: string, mode: 'push' | 'replace' = 'push') => {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      const viewVal = tabToViewParam(tab);
+      url.searchParams.set('view', viewVal);
+      if (tab === 'test') {
+        url.searchParams.set('step', stepSlug || QUESTION_SLUG_MAP[1]);
+      } else {
+        url.searchParams.delete('step');
+      }
+      const nextHref = `${url.pathname}${url.search}`;
+      const currentHref = `${window.location.pathname}${window.location.search}`;
+      if (nextHref === currentHref) return;
+
+      const statePayload = { view: viewVal, tab, step: stepSlug };
+      if (mode === 'replace') {
+        window.history.replaceState(statePayload, '', nextHref);
+      } else {
+        window.history.pushState(statePayload, '', nextHref);
+      }
+    },
+    []
+  );
+
+  // Ensure initial URL has ?view=...&step=... on mount
+  useEffect(() => {
+    syncUrlHistory(activeTab, currentStepSlug, 'replace');
+  }, []);
+
+  // Listen to browser Back / Forward (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const nextTab = viewParamToTab(params.get('view')) || 'test';
+      const nextStep = params.get('step') || QUESTION_SLUG_MAP[1];
+      setActiveTab(nextTab);
+      if (nextTab === 'test') {
+        setCurrentStepSlug(nextStep);
+        const isMoment =
+          nextStep === MIND_MOMENT_SLUGS[0] ||
+          nextStep === MIND_MOMENT_SLUGS[1] ||
+          nextStep === MIND_MOMENT_SLUGS[2];
+        setReflectPart(isMoment ? 'moments' : 'questions');
+        if (!isMoment) {
+          const foundQ = studioQuestions.find((q) => getQuestionSlug(q) === nextStep);
+          if (foundQ) {
+            setCurrentQIdx(Math.max(0, foundQ.id - 1));
+          }
+        }
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [studioQuestions]);
+
+  // Persist consumer progress to localStorage whenever state changes
+  useEffect(() => {
+    const hasAnyAnswer = Object.keys(responses).length > 0;
+    const hasAnyMoment =
+      telemetry.pulse_reaction.completed ||
+      telemetry.constellation_memory.completed ||
+      telemetry.minds_eye.completed;
+
+    if (hasAnyAnswer || hasAnyMoment || currentStepSlug !== QUESTION_SLUG_MAP[1]) {
+      saveProgressToStorage({
+        userName,
+        responses,
+        telemetry,
+        currentStepSlug,
+        includeSneakyBonus,
+        userMaskId,
+      });
+    }
+  }, [userName, responses, telemetry, currentStepSlug, includeSneakyBonus, userMaskId]);
 
   // Welcome typewriter effect
   useEffect(() => {
@@ -126,7 +328,6 @@ export const App: React.FC = () => {
     setStudioQuestions(overview.questions);
     setStudioFlows(overview.flows);
     setActiveFlowId(overview.active_flow_id);
-    setShadowMatrix(overview.shadow_calibration_matrix);
   }, []);
 
   // Effective responses: ONLY use SAMPLE_DEMO_RESPONSES as fallback for Portrait/Together preview when user hasn't answered any questions yet
@@ -207,7 +408,7 @@ export const App: React.FC = () => {
     (async () => {
       await AuraAPI.fetchScienceModels();
       await refreshStudioData();
-      await refreshPortrait({}, 'auto');
+      await refreshPortrait(responses, userMaskId);
       await refreshChemistry();
     })();
   }, []);
@@ -217,9 +418,18 @@ export const App: React.FC = () => {
     refreshPortrait(responses, userMaskId, telemetry);
   }, [telemetry]);
 
+  const handleNavigateStepSlug = useCallback(
+    (slug: string, pushHistory = true) => {
+      setCurrentStepSlug(slug);
+      syncUrlHistory('test', slug, pushHistory ? 'push' : 'replace');
+    },
+    [syncUrlHistory]
+  );
+
   const handleSwitchTab = useCallback(
     async (tab: MainTab) => {
       setActiveTab(tab);
+      syncUrlHistory(tab, currentStepSlug, 'push');
       if (typeof window !== 'undefined') {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -227,12 +437,22 @@ export const App: React.FC = () => {
         await refreshPortrait();
       } else if (tab === 'chemistry') {
         await refreshChemistry();
-      } else if (tab === 'pro') {
-        await refreshStudioData();
       }
     },
-    [refreshPortrait, refreshChemistry, refreshStudioData]
+    [currentStepSlug, refreshChemistry, refreshPortrait, syncUrlHistory]
   );
+
+  const handleResetProgress = useCallback(() => {
+    clearSavedProgress();
+    setResponses({});
+    setCurrentQIdx(0);
+    setReflectPart('questions');
+    const firstSlug = QUESTION_SLUG_MAP[1];
+    setCurrentStepSlug(firstSlug);
+    AuraMicroGamesBridge.resetState();
+    syncUrlHistory('test', firstSlug, 'push');
+    showToast('Started a fresh quiet reflection');
+  }, [showToast, syncUrlHistory]);
 
   const handleDismissWelcome = useCallback(
     async (targetTab: MainTab = 'test') => {
@@ -241,15 +461,22 @@ export const App: React.FC = () => {
       }
       if (targetTab === 'test') {
         // CRITICAL: Ensure completely empty responses `{}` on fresh reflection start
+        clearSavedProgress();
         setResponses({});
         setCurrentQIdx(0);
+        const firstSlug = QUESTION_SLUG_MAP[1];
+        setCurrentStepSlug(firstSlug);
         AuraMicroGamesBridge.resetState();
         setReflectPart('questions');
+        setWelcomeVisible(false);
+        setActiveTab('test');
+        syncUrlHistory('test', firstSlug, 'push');
+        return;
       }
       setWelcomeVisible(false);
       await handleSwitchTab(targetTab);
     },
-    [welcomeInputName, handleSwitchTab]
+    [welcomeInputName, handleSwitchTab, syncUrlHistory]
   );
 
   const triggerSynthesisLoader = useCallback(
@@ -305,7 +532,7 @@ export const App: React.FC = () => {
     const s = userRawScores;
     const vec = [s.O, s.C, s.E, s.A, s.N].map((v) => Math.round(v)).join(',');
     const maskId = decomposition?.mask_applied?.id || userMaskId;
-    const url = `${window.location.origin}${window.location.pathname}?u=${encodeURIComponent(
+    const url = `${window.location.origin}${window.location.pathname}?view=portrait&u=${encodeURIComponent(
       userName
     )}&m=${encodeURIComponent(maskId)}&s=${vec}`;
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -318,27 +545,30 @@ export const App: React.FC = () => {
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
     w.switchTab = (tabName: MainTab) => handleSwitchTab(tabName);
-    w.switchReflectPart = (part: 'questions' | 'moments') => setReflectPart(part);
+    w.switchReflectPart = (part: 'questions' | 'moments') => {
+      setReflectPart(part);
+      if (part === 'moments') {
+        handleNavigateStepSlug(MIND_MOMENT_SLUGS[0], true);
+      } else {
+        handleNavigateStepSlug(QUESTION_SLUG_MAP[currentQIdx + 1] || QUESTION_SLUG_MAP[1], true);
+      }
+    };
     w.dismissWelcome = (target: MainTab) => handleDismissWelcome(target);
     w.selectAnswer = (qId: number, val: number) => handleSelectAnswer(qId, val);
     w.selectNeuroMask = (maskId: string) => handleSelectMask(maskId);
     w.unlockProDemo = (msg?: string) => handleUnlockPro(msg);
-    w.setProSubTab = (sub: 'pricing' | 'lab') => setProSubTab(sub);
     w.copyShareLink = () => handleSharePortrait();
-    w.resetReflection = () => {
-      setResponses({});
-      setCurrentQIdx(0);
-      AuraMicroGamesBridge.resetState();
-      showToast('Started a fresh quiet reflection');
-    };
+    w.resetReflection = () => handleResetProgress();
   }, [
-    handleSwitchTab,
+    currentQIdx,
     handleDismissWelcome,
+    handleNavigateStepSlug,
+    handleResetProgress,
     handleSelectAnswer,
     handleSelectMask,
-    handleUnlockPro,
     handleSharePortrait,
-    showToast,
+    handleSwitchTab,
+    handleUnlockPro,
   ]);
 
   const activeFlow = useMemo(() => {
@@ -387,7 +617,7 @@ export const App: React.FC = () => {
             </div>
             <h1
               className="serif"
-              style={{ fontSize: '33px', lineHeight: 1.14, marginBottom: '10px' }}
+              style={{ fontSize: '34px', lineHeight: 1.14, marginBottom: '10px' }}
             >
               Take a quiet breath.
               <br />
@@ -398,7 +628,7 @@ export const App: React.FC = () => {
             <p
               id="welcome-tw-text"
               style={{
-                fontSize: '13.5px',
+                fontSize: '14px',
                 color: 'var(--text-muted)',
                 minHeight: '42px',
                 marginBottom: '18px',
@@ -484,22 +714,29 @@ export const App: React.FC = () => {
               · Quiet Mind Portrait
             </span>
           </div>
-          <div id="header-tier-badge" className="tier-badge">
-            Calm Reflection
+          <div className="top-header-right">
+            <div id="header-tier-badge" className="tier-badge">
+              Calm Reflection
+            </div>
           </div>
         </header>
 
-        {/* VIEW 1: REFLECT */}
+        {/* VIEW 1: REFLECT (End-to-End Typeform Flow with Interwoven Mind Moments) */}
         {activeTab === 'test' && (
           <QuietReflection
             questions={studioQuestions}
             activeFlow={activeFlow}
             responses={responses}
             currentQIdx={currentQIdx}
+            currentStepSlug={currentStepSlug}
             reflectPart={reflectPart}
+            includeSneakyBonus={includeSneakyBonus}
+            onToggleSneakyBonus={(next) => setIncludeSneakyBonus(next)}
             onSelectAnswer={(qId, val) => handleSelectAnswer(qId, val)}
             onSetCurrentQIdx={(idx) => setCurrentQIdx(idx)}
+            onNavigateStepSlug={(slug, push) => handleNavigateStepSlug(slug, push)}
             onSwitchReflectPart={(part) => setReflectPart(part)}
+            onResetProgress={handleResetProgress}
             onFinishToPortrait={(tel) => triggerSynthesisLoader(tel)}
           />
         )}
@@ -514,6 +751,7 @@ export const App: React.FC = () => {
             onOpenMindMoments={() => {
               setActiveTab('test');
               setReflectPart('moments');
+              handleNavigateStepSlug(MIND_MOMENT_SLUGS[0], true);
             }}
             onUnlockPro={(msg) => handleUnlockPro(msg)}
             onSharePortrait={handleSharePortrait}
@@ -566,26 +804,20 @@ export const App: React.FC = () => {
           />
         )}
 
-        {/* VIEW 4: MORE & KAE'S SCIENCE STUDIO */}
+        {/* VIEW 4: GUIDES (Consumer Deep Portrait Guides & Passes) */}
         {activeTab === 'pro' && (
           <MoreAndLabView
-            subTab={proSubTab}
-            questions={studioQuestions}
-            flows={studioFlows}
-            activeFlowId={activeFlowId}
-            shadowMatrix={shadowMatrix}
-            onChangeSubTab={(sub) => setProSubTab(sub)}
             onPreviewFullPortraitGuide={() => {
               handleUnlockPro('Opened Full Portrait Guide');
               handleSwitchTab('blueprint');
             }}
-            onRefreshStudioData={refreshStudioData}
+            onOpenTogetherView={() => handleSwitchTab('chemistry')}
             onShowToast={showToast}
           />
         )}
       </div>
 
-      {/* Bottom Mobile Navigation */}
+      {/* Bottom Navigation (Reflect · Portrait · Together · Guides) */}
       <nav className="bottom-nav">
         <button
           id="nav-test"
@@ -621,7 +853,7 @@ export const App: React.FC = () => {
           className={`nav-tab ${activeTab === 'pro' ? 'active' : ''}`}
         >
           <span className="nav-icon">✧</span>
-          <span>More</span>
+          <span>Guides</span>
         </button>
       </nav>
     </>

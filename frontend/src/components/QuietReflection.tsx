@@ -1,17 +1,66 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIKERT_OPTIONS } from '../data/scienceBundle';
 import { ItemBankQuestion, StudioFlow, TelemetryState } from '../types/aura';
-import { MindMoments } from './MindMoments';
+import { MIND_MOMENT_SLUGS, MindMoments, useTelemetryState } from './MindMoments';
+
+export const QUESTION_SLUG_MAP: Record<number, string> = {
+  1: 'q-01-deeper-patterns',
+  2: 'q-02-subtle-shifts',
+  3: 'q-03-focus-flow',
+  4: 'q-04-tidy-space',
+  5: 'q-05-two-conversations',
+  6: 'q-06-group-momentum',
+  7: 'q-07-feeling-heard',
+  8: 'q-08-direct-truth',
+  9: 'q-09-looking-ahead',
+  10: 'q-10-sudden-change',
+  11: 'q-11-quiet-effort',
+  12: 'q-12-current-season',
+  13: 'q-13-browser-tabs',
+  14: 'q-14-text-warmth',
+  15: 'q-15-canceled-plans',
+};
+
+export function getQuestionSlug(q: ItemBankQuestion): string {
+  if (QUESTION_SLUG_MAP[q.id]) {
+    return QUESTION_SLUG_MAP[q.id];
+  }
+  const cleanTheme = (q.calm_theme || 'reflection')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `q-${String(q.id).padStart(2, '0')}-${cleanTheme || 'item'}`;
+}
+
+export type FlowStepItem =
+  | {
+      kind: 'question';
+      slug: string;
+      question: ItemBankQuestion;
+      questionIndex: number; // 0-based index among flowQuestions
+    }
+  | {
+      kind: 'moment';
+      slug: string;
+      momentIndex: 0 | 1 | 2;
+      momentTitle: string;
+      momentSubtitle: string;
+    };
 
 interface QuietReflectionProps {
   questions: ItemBankQuestion[];
   activeFlow: StudioFlow;
   responses: Record<number, number>;
   currentQIdx: number;
+  currentStepSlug: string;
   reflectPart: 'questions' | 'moments';
+  includeSneakyBonus: boolean;
+  onToggleSneakyBonus: (next: boolean) => void;
   onSelectAnswer: (qId: number, val: number, nextQIdxOverride?: number) => void;
   onSetCurrentQIdx: (idx: number) => void;
+  onNavigateStepSlug: (slug: string, pushHistory?: boolean) => void;
   onSwitchReflectPart: (part: 'questions' | 'moments') => void;
+  onResetProgress: () => void;
   onFinishToPortrait: (telemetry?: TelemetryState) => void;
 }
 
@@ -20,15 +69,22 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   activeFlow,
   responses,
   currentQIdx,
+  currentStepSlug,
   reflectPart,
+  includeSneakyBonus,
+  onToggleSneakyBonus,
   onSelectAnswer,
   onSetCurrentQIdx,
+  onNavigateStepSlug,
   onSwitchReflectPart,
+  onResetProgress,
   onFinishToPortrait,
 }) => {
-  const [includeSneakyBonus, setIncludeSneakyBonus] = useState<boolean>(false);
   const [branchNotice, setBranchNotice] = useState<string | null>(null);
+  // Whether user is walking the natural interwoven flow ('interwoven') or clicked "Three Mind Moments" directly ('moments_direct')
+  const [momentsDirectSequence, setMomentsDirectSequence] = useState<boolean>(false);
   const autoAdvanceRef = useRef<number | null>(null);
+  const telemetry = useTelemetryState();
 
   // Determine the ordered list of questions to present
   const flowQuestions = useMemo(() => {
@@ -50,7 +106,6 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
           ids.push(bonusId);
         }
       }
-      // Also include any custom studio questions > 15
       questions.forEach((q) => {
         if (q.id > 15 && !ids.includes(q.id)) {
           ids.push(q.id);
@@ -65,15 +120,93 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
     return resolved.length > 0 ? resolved : questions.slice(0, 12);
   }, [questions, activeFlow, includeSneakyBonus]);
 
-  const safeIdx = Math.max(0, Math.min(currentQIdx, flowQuestions.length - 1));
-  const currentQuestion = flowQuestions[safeIdx] || flowQuestions[0];
-  const totalCount = flowQuestions.length;
+  // Build the unified end-to-end interwoven sequence:
+  // Q1..Q4 -> Mind Moment 1 (Still Water) -> Q5..Q8 -> Mind Moment 2 (Night Sky) -> Q9..Q12 (or Q15) -> Mind Moment 3 (Inner Canvas)
+  const interwovenSteps = useMemo<FlowStepItem[]>(() => {
+    const steps: FlowStepItem[] = [];
+    flowQuestions.forEach((q, qIdx) => {
+      steps.push({
+        kind: 'question',
+        slug: getQuestionSlug(q),
+        question: q,
+        questionIndex: qIdx,
+      });
 
-  const answeredCount = useMemo(() => {
+      // After Question 4 (index 3), weave in Mind Moment 1: Still Water
+      if (qIdx === 3) {
+        steps.push({
+          kind: 'moment',
+          slug: MIND_MOMENT_SLUGS[0],
+          momentIndex: 0,
+          momentTitle: 'Moment 01 · Still Water',
+          momentSubtitle: 'Attentional Steadiness Interlude',
+        });
+      }
+
+      // After Question 8 (index 7), weave in Mind Moment 2: Night Sky
+      if (qIdx === 7) {
+        steps.push({
+          kind: 'moment',
+          slug: MIND_MOMENT_SLUGS[1],
+          momentIndex: 1,
+          momentTitle: 'Moment 02 · Night Sky',
+          momentSubtitle: 'Pattern Memory Interlude',
+        });
+      }
+    });
+
+    // After the final question, weave in Mind Moment 3: Inner Canvas
+    steps.push({
+      kind: 'moment',
+      slug: MIND_MOMENT_SLUGS[2],
+      momentIndex: 2,
+      momentTitle: 'Moment 03 · Inner Canvas',
+      momentSubtitle: 'Mind’s Eye & Inner Stream Finale',
+    });
+
+    return steps;
+  }, [flowQuestions]);
+
+  // Resolve active step in interwovenSteps
+  const activeStepIndex = useMemo(() => {
+    if (reflectPart === 'moments') {
+      const foundMoment = interwovenSteps.findIndex(
+        (s) => s.kind === 'moment' && s.slug === currentStepSlug
+      );
+      if (foundMoment >= 0) return foundMoment;
+      const firstMoment = interwovenSteps.findIndex((s) => s.kind === 'moment');
+      return firstMoment >= 0 ? firstMoment : 0;
+    }
+
+    if (currentStepSlug) {
+      const idxBySlug = interwovenSteps.findIndex((s) => s.slug === currentStepSlug);
+      if (idxBySlug >= 0) return idxBySlug;
+    }
+
+    const safeQ = Math.max(0, Math.min(currentQIdx, flowQuestions.length - 1));
+    const idxByQ = interwovenSteps.findIndex(
+      (s) => s.kind === 'question' && s.questionIndex === safeQ
+    );
+    return idxByQ >= 0 ? idxByQ : 0;
+  }, [reflectPart, currentStepSlug, interwovenSteps, currentQIdx, flowQuestions.length]);
+
+  const activeStep = interwovenSteps[activeStepIndex] || interwovenSteps[0];
+  const totalStepsCount = interwovenSteps.length;
+  const totalQuestionsCount = flowQuestions.length;
+
+  const answeredQuestionsCount = useMemo(() => {
     return flowQuestions.filter(
       (q) => responses[q.id] !== undefined && responses[q.id] !== null
     ).length;
   }, [flowQuestions, responses]);
+
+  const completedMomentsCount = useMemo(() => {
+    let c = 0;
+    if (telemetry.pulse_reaction.completed) c += 1;
+    if (telemetry.constellation_memory.completed) c += 1;
+    if (telemetry.minds_eye.completed) c += 1;
+    return c;
+  }, [telemetry]);
 
   useEffect(() => {
     return () => {
@@ -83,91 +216,240 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
     };
   }, []);
 
-  const evaluateBranchRule = (questionId: number, answerVal: number): number | null => {
-    if (!activeFlow || !Array.isArray(activeFlow.branches)) return null;
-    for (const br of activeFlow.branches) {
-      if (Number(br.if_question_id) !== Number(questionId)) continue;
-      const hit =
-        br.operator === '>='
-          ? answerVal >= br.threshold
-          : br.operator === '<='
-          ? answerVal <= br.threshold
-          : br.operator === '>'
-          ? answerVal > br.threshold
-          : br.operator === '<'
-          ? answerVal < br.threshold
-          : answerVal === br.threshold;
-      if (hit) {
-        const targetIdx = flowQuestions.findIndex(
-          (fq) => Number(fq.id) === Number(br.then_goto_question_id)
-        );
-        if (targetIdx >= 0 && targetIdx !== safeIdx) {
-          return targetIdx;
+  const goToStepIndex = useCallback(
+    (nextStepIdx: number, pushHistory = true) => {
+      if (nextStepIdx < 0) return;
+      if (nextStepIdx >= interwovenSteps.length) {
+        onFinishToPortrait();
+        return;
+      }
+      const target = interwovenSteps[nextStepIdx];
+      if (target.kind === 'question') {
+        setMomentsDirectSequence(false);
+        onSetCurrentQIdx(target.questionIndex);
+        if (reflectPart !== 'questions') {
+          onSwitchReflectPart('questions');
+        }
+        onNavigateStepSlug(target.slug, pushHistory);
+      } else {
+        if (reflectPart !== 'moments') {
+          onSwitchReflectPart('moments');
+        }
+        onNavigateStepSlug(target.slug, pushHistory);
+      }
+    },
+    [
+      interwovenSteps,
+      onFinishToPortrait,
+      onNavigateStepSlug,
+      onSetCurrentQIdx,
+      onSwitchReflectPart,
+      reflectPart,
+    ]
+  );
+
+  const evaluateBranchRule = useCallback(
+    (questionId: number, answerVal: number): number | null => {
+      if (!activeFlow || !Array.isArray(activeFlow.branches)) return null;
+      for (const br of activeFlow.branches) {
+        if (Number(br.if_question_id) !== Number(questionId)) continue;
+        const hit =
+          br.operator === '>='
+            ? answerVal >= br.threshold
+            : br.operator === '<='
+            ? answerVal <= br.threshold
+            : br.operator === '>'
+            ? answerVal > br.threshold
+            : br.operator === '<'
+            ? answerVal < br.threshold
+            : answerVal === br.threshold;
+        if (hit) {
+          const targetStepIdx = interwovenSteps.findIndex(
+            (s) => s.kind === 'question' && Number(s.question.id) === Number(br.then_goto_question_id)
+          );
+          if (targetStepIdx >= 0 && targetStepIdx !== activeStepIndex) {
+            return targetStepIdx;
+          }
         }
       }
-    }
-    return null;
-  };
+      return null;
+    },
+    [activeFlow, interwovenSteps, activeStepIndex]
+  );
 
-  const handleChoiceClick = (qId: number, val: number) => {
-    if (autoAdvanceRef.current !== null) {
-      window.clearTimeout(autoAdvanceRef.current);
-      autoAdvanceRef.current = null;
-    }
-
-    const branchedIdx = evaluateBranchRule(qId, val);
-    onSelectAnswer(qId, val, branchedIdx !== null ? branchedIdx : undefined);
-
-    if (branchedIdx !== null) {
-      const targetQ = flowQuestions[branchedIdx];
-      setBranchNotice(
-        `Adaptive flow branched to Question ${String(branchedIdx + 1).padStart(2, '0')} (${
-          targetQ?.calm_theme || 'Everyday habit'
-        })`
-      );
-    } else {
-      setBranchNotice(null);
-    }
-
-    autoAdvanceRef.current = window.setTimeout(() => {
-      autoAdvanceRef.current = null;
-      if (branchedIdx !== null) {
-        onSetCurrentQIdx(branchedIdx);
-      } else if (safeIdx < totalCount - 1) {
-        onSetCurrentQIdx(safeIdx + 1);
-      } else {
-        onFinishToPortrait();
+  const handleChoiceClick = useCallback(
+    (qId: number, val: number) => {
+      if (autoAdvanceRef.current !== null) {
+        window.clearTimeout(autoAdvanceRef.current);
+        autoAdvanceRef.current = null;
       }
-    }, 200);
-  };
 
-  const handlePrev = () => {
+      const branchedStepIdx = evaluateBranchRule(qId, val);
+      const branchedStep =
+        branchedStepIdx !== null ? interwovenSteps[branchedStepIdx] : null;
+
+      onSelectAnswer(qId, val);
+
+      if (branchedStep && branchedStep.kind === 'question') {
+        if (!includeSneakyBonus && branchedStep.question.id >= 13) {
+          onToggleSneakyBonus(true);
+        }
+        setBranchNotice(
+          `Adaptive flow queued Habit Question ${String(branchedStep.questionIndex + 1).padStart(
+            2,
+            '0'
+          )} (${branchedStep.question.calm_theme || 'Everyday habit'}) into your reflection`
+        );
+      } else {
+        setBranchNotice(null);
+      }
+
+      autoAdvanceRef.current = window.setTimeout(() => {
+        autoAdvanceRef.current = null;
+        goToStepIndex(activeStepIndex + 1, true);
+      }, 210);
+    },
+    [
+      activeStepIndex,
+      evaluateBranchRule,
+      goToStepIndex,
+      includeSneakyBonus,
+      interwovenSteps,
+      onSelectAnswer,
+      onToggleSneakyBonus,
+    ]
+  );
+
+  const handlePrev = useCallback(() => {
     if (autoAdvanceRef.current !== null) {
       window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
     }
     setBranchNotice(null);
-    if (safeIdx > 0) {
-      onSetCurrentQIdx(safeIdx - 1);
+    if (activeStepIndex > 0) {
+      goToStepIndex(activeStepIndex - 1, true);
     }
-  };
+  }, [activeStepIndex, goToStepIndex]);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (autoAdvanceRef.current !== null) {
       window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
     }
     setBranchNotice(null);
-    if (safeIdx < totalCount - 1) {
-      onSetCurrentQIdx(safeIdx + 1);
+    if (activeStepIndex < totalStepsCount - 1) {
+      goToStepIndex(activeStepIndex + 1, true);
     } else {
       onFinishToPortrait();
     }
-  };
+  }, [activeStepIndex, goToStepIndex, onFinishToPortrait, totalStepsCount]);
+
+  // Typeform-style Keyboard Navigation (Keys 1-5 to answer, Up/Down/Left/Right/Enter to navigate)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (activeStep.kind === 'question') {
+        if (['1', '2', '3', '4', '5'].includes(e.key)) {
+          e.preventDefault();
+          handleChoiceClick(activeStep.question.id, Number(e.key));
+          return;
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          handlePrev();
+          return;
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleNext();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeStep, handleChoiceClick, handleNext, handlePrev]);
+
+  // Compute progress percentage across the entire interwoven flow
+  const progressPct = Math.min(
+    100,
+    Math.max(4, Math.round(((activeStepIndex + 1) / totalStepsCount) * 100))
+  );
+
+  // Label for the next step after a Mind Moment
+  const nextStepAfterMomentLabel = useMemo(() => {
+    if (activeStep.kind !== 'moment') return undefined;
+    if (momentsDirectSequence) {
+      if (activeStep.momentIndex === 0) return 'Continue to Night Sky →';
+      if (activeStep.momentIndex === 1) return 'Continue to Inner Canvas →';
+      return 'Complete Mind Moments & See My Portrait →';
+    }
+    const nextStep = interwovenSteps[activeStepIndex + 1];
+    if (!nextStep) {
+      return 'Complete Mind Moments & See My Portrait →';
+    }
+    if (nextStep.kind === 'question') {
+      return `Continue to Question ${String(nextStep.questionIndex + 1).padStart(2, '0')} →`;
+    }
+    return `Continue to ${nextStep.momentTitle} →`;
+  }, [activeStep, activeStepIndex, interwovenSteps, momentsDirectSequence]);
+
+  const handleCompleteSingleMoment = useCallback(
+    (momentIdx: 0 | 1 | 2, latestTel: TelemetryState) => {
+      if (momentsDirectSequence) {
+        if (momentIdx === 0) {
+          onNavigateStepSlug(MIND_MOMENT_SLUGS[1], true);
+          return;
+        }
+        if (momentIdx === 1) {
+          onNavigateStepSlug(MIND_MOMENT_SLUGS[2], true);
+          return;
+        }
+        onFinishToPortrait(latestTel);
+        return;
+      }
+
+      // In the end-to-end interwoven flow, advance to the next step in interwovenSteps!
+      if (activeStepIndex < totalStepsCount - 1) {
+        goToStepIndex(activeStepIndex + 1, true);
+      } else {
+        onFinishToPortrait(latestTel);
+      }
+    },
+    [
+      activeStepIndex,
+      goToStepIndex,
+      momentsDirectSequence,
+      onFinishToPortrait,
+      onNavigateStepSlug,
+      totalStepsCount,
+    ]
+  );
+
+  const currentQuestion =
+    activeStep.kind === 'question'
+      ? activeStep.question
+      : flowQuestions[Math.max(0, Math.min(currentQIdx, flowQuestions.length - 1))] ||
+        flowQuestions[0];
+
+  const safeQOrdinal =
+    activeStep.kind === 'question'
+      ? activeStep.questionIndex + 1
+      : Math.max(1, Math.min(currentQIdx + 1, flowQuestions.length));
 
   const curVal =
-    currentQuestion &&
-    Object.prototype.hasOwnProperty.call(responses, currentQuestion.id)
+    currentQuestion && Object.prototype.hasOwnProperty.call(responses, currentQuestion.id)
       ? responses[currentQuestion.id]
       : undefined;
 
@@ -176,131 +458,131 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
     currentQuestion?.layer === 'shadow_behavioral_probe';
 
   return (
-    <section id="view-test" className="view-section active">
-      {/* 2-Part Flow Switcher */}
-      <div className="seg-control" style={{ marginBottom: '14px' }}>
-        <button
-          id="reflect-tab-questions"
-          type="button"
-          onClick={() => onSwitchReflectPart('questions')}
-          className={`seg-btn ${reflectPart === 'questions' ? 'active' : ''}`}
-        >
-          1. Quiet Questions ({totalCount})
-        </button>
-        <button
-          id="reflect-tab-moments"
-          type="button"
-          onClick={() => onSwitchReflectPart('moments')}
-          className={`seg-btn ${reflectPart === 'moments' ? 'active' : ''}`}
-        >
-          2. Three Mind Moments (30s)
-        </button>
+    <section id="view-test" className="view-section active typeform-stage-section">
+      {/* Razor-Thin Continuous Top Viewport Progress Bar */}
+      <div className="typeform-top-progress-rail" aria-hidden="true">
+        <div
+          id="q-progress-fill"
+          className="typeform-top-progress-fill"
+          style={{ width: `${progressPct}%` }}
+        />
       </div>
 
-      {/* Part 1: Quiet Reflection Questions */}
-      {reflectPart === 'questions' && currentQuestion && (
-        <div id="reflect-part-questions">
-          <div className="glass-card" style={{ marginBottom: '12px' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '10px',
-                gap: '8px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <span
-                id="q-counter"
-                style={{
-                  fontSize: '11.5px',
-                  color: 'var(--accent)',
-                  fontWeight: 600,
-                  letterSpacing: '0.03em',
+      {/* Whisper-Quiet Top Journey Bar & Quick Jump Switcher */}
+      <div className="typeform-journey-bar">
+        <div className="seg-control typeform-seg-control">
+          <button
+            id="reflect-tab-questions"
+            type="button"
+            onClick={() => {
+              setMomentsDirectSequence(false);
+              onSwitchReflectPart('questions');
+              const qStep = interwovenSteps.find(
+                (s) =>
+                  s.kind === 'question' &&
+                  s.questionIndex === Math.max(0, Math.min(currentQIdx, flowQuestions.length - 1))
+              );
+              if (qStep) onNavigateStepSlug(qStep.slug, true);
+            }}
+            className={`seg-btn ${activeStep.kind === 'question' ? 'active' : ''}`}
+          >
+            Quiet Questions ({answeredQuestionsCount}/{totalQuestionsCount})
+          </button>
+          <button
+            id="reflect-tab-moments"
+            type="button"
+            onClick={() => {
+              setMomentsDirectSequence(true);
+              onSwitchReflectPart('moments');
+              if (activeStep.kind !== 'moment') {
+                onNavigateStepSlug(MIND_MOMENT_SLUGS[0], true);
+              }
+            }}
+            className={`seg-btn ${activeStep.kind === 'moment' ? 'active' : ''}`}
+          >
+            Three Mind Moments ({completedMomentsCount}/3)
+          </button>
+        </div>
+
+        {/* Clickable End-to-End Flow Map Pills */}
+        <div className="typeform-step-map" role="navigation" aria-label="Assessment Steps">
+          {interwovenSteps.map((step, sIdx) => {
+            const isCurrent = sIdx === activeStepIndex;
+            const isDone =
+              step.kind === 'question'
+                ? responses[step.question.id] !== undefined
+                : step.momentIndex === 0
+                ? telemetry.pulse_reaction.completed
+                : step.momentIndex === 1
+                ? telemetry.constellation_memory.completed
+                : telemetry.minds_eye.completed;
+
+            const shortLabel =
+              step.kind === 'question'
+                ? String(step.questionIndex + 1).padStart(2, '0')
+                : step.momentIndex === 0
+                ? '✦ M1'
+                : step.momentIndex === 1
+                ? '✦ M2'
+                : '✦ M3';
+
+            return (
+              <button
+                key={step.slug}
+                type="button"
+                title={
+                  step.kind === 'question'
+                    ? `Question ${step.questionIndex + 1}: ${step.question.calm_theme} (?step=${step.slug})`
+                    : `${step.momentTitle} (?step=${step.slug})`
+                }
+                onClick={() => {
+                  setMomentsDirectSequence(false);
+                  goToStepIndex(sIdx, true);
                 }}
+                className={`typeform-step-node ${step.kind === 'moment' ? 'is-moment' : ''} ${
+                  isCurrent ? 'active' : ''
+                } ${isDone ? 'done' : ''}`}
               >
-                QUESTION {String(safeIdx + 1).padStart(2, '0')} OF{' '}
-                {String(totalCount).padStart(2, '0')}
+                {shortLabel}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ====================================================================
+          ACTIVE STEP: QUESTION STAGE (Open Borderless Typeform Canvas)
+         ==================================================================== */}
+      {activeStep.kind === 'question' && currentQuestion && (
+        <div id="reflect-part-questions" className="typeform-canvas-wrap">
+          <div className="typeform-question-stage">
+            {/* Eyebrow Metadata + URL Slug Indicator */}
+            <div className="typeform-eyebrow-row">
+              <span id="q-counter" className="typeform-eyebrow-step">
+                QUESTION {String(safeQOrdinal).padStart(2, '0')} OF{' '}
+                {String(totalQuestionsCount).padStart(2, '0')}
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {isShadowHabitQuestion && (
-                  <span
-                    style={{
-                      fontSize: '10.5px',
-                      color: 'var(--amber)',
-                      background: 'var(--amber-soft)',
-                      padding: '3px 9px',
-                      borderRadius: '999px',
-                      fontWeight: 600,
-                    }}
-                  >
-                    ✦ Everyday Habit Moment
-                  </span>
-                )}
-                <span
-                  id="q-aspect-badge"
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--text-muted)',
-                    background: 'rgba(255,255,255,0.05)',
-                    padding: '4px 11px',
-                    borderRadius: '999px',
-                  }}
-                >
-                  {currentQuestion.calm_theme || 'Quiet Reflection'}
-                </span>
-              </div>
+              <span className="typeform-eyebrow-sep">→</span>
+              <span id="q-aspect-badge" className="typeform-eyebrow-theme">
+                {currentQuestion.calm_theme || 'Quiet Reflection'}
+              </span>
+              {isShadowHabitQuestion && (
+                <span className="typeform-habit-pill">✦ Everyday Habit Moment</span>
+              )}
+              <span id="step-url-slug-badge" className="typeform-slug-pill mono">
+                ?step={activeStep.slug}
+              </span>
             </div>
 
-            <div
-              className="spectrum-track"
-              style={{ height: '4px', marginBottom: '18px', overflow: 'hidden' }}
-            >
-              <div
-                id="q-progress-fill"
-                className="spectrum-fill"
-                style={{
-                  width: `${((safeIdx + 1) / totalCount) * 100}%`,
-                  background: 'linear-gradient(90deg,#8b5cf6,#ec4899)',
-                }}
-              />
-            </div>
+            {branchNotice && <div className="typeform-branch-banner">↳ {branchNotice}</div>}
 
-            {branchNotice && (
-              <div
-                style={{
-                  fontSize: '11px',
-                  color: '#34d399',
-                  background: 'rgba(52, 211, 153, 0.1)',
-                  border: '1px solid rgba(52, 211, 153, 0.25)',
-                  borderRadius: '10px',
-                  padding: '6px 10px',
-                  marginBottom: '10px',
-                }}
-              >
-                ↳ {branchNotice}
-              </div>
-            )}
+            {/* Large Open Editorial Serif Prompt */}
+            <h2 id="q-prompt-text" className="serif typeform-prompt-heading">
+              {currentQuestion.text}
+            </h2>
 
-            <div
-              style={{
-                minHeight: '80px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-              }}
-            >
-              <h2
-                id="q-prompt-text"
-                className="serif"
-                style={{ fontSize: '24px', lineHeight: 1.28, fontWeight: 400 }}
-              >
-                {currentQuestion.text}
-              </h2>
-            </div>
-
-            <div id="likert-choices" className="choice-stack">
+            {/* Typeform Keycap Choice Rows */}
+            <div id="likert-choices" className="choice-stack typeform-choice-stack">
               {LIKERT_OPTIONS.map((opt) => {
                 const isSelected =
                   curVal !== undefined && curVal !== null && Number(curVal) === opt.val;
@@ -309,205 +591,142 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
                     key={opt.val}
                     type="button"
                     onClick={() => handleChoiceClick(currentQuestion.id, opt.val)}
-                    className={`choice-btn ${isSelected ? 'selected' : ''}`}
+                    className={`choice-btn typeform-choice-btn ${isSelected ? 'selected' : ''}`}
                   >
-                    <span>{opt.label}</span>
+                    <span className="typeform-choice-left">
+                      <kbd className="typeform-keycap">{opt.val}</kbd>
+                      <span className="typeform-choice-label">{opt.label}</span>
+                    </span>
                     <span className="choice-indicator">{isSelected ? '✓' : ''}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: '18px',
-                paddingTop: '14px',
-                borderTop: '1px solid var(--border)',
-              }}
-            >
-              <button
-                id="btn-prev-q"
-                type="button"
-                onClick={handlePrev}
-                className="btn-ghost"
-                style={{ visibility: safeIdx === 0 ? 'hidden' : 'visible' }}
-              >
-                ← Back
-              </button>
-              <div style={{ textAlign: 'center' }}>
-                <span
-                  id="live-emerging-code"
-                  style={{ fontSize: '11.5px', color: 'var(--text-dim)' }}
+            {/* Upcoming Mind Moment Interlude Hint on Q4 & Q8 */}
+            {(safeQOrdinal === 4 || safeQOrdinal === 8) && (
+              <div className="typeform-upcoming-interlude-hint">
+                ✦ Next up after this question:{' '}
+                <strong>
+                  {safeQOrdinal === 4
+                    ? 'Mind Moment 01 · Still Water (8s palate cleanser)'
+                    : 'Mind Moment 02 · Night Sky Constellation (8s palate cleanser)'}
+                </strong>
+              </div>
+            )}
+
+            {/* Minimal Typeform Utility Footer */}
+            <div className="typeform-footer-bar">
+              <div className="typeform-nav-arrows">
+                <button
+                  id="btn-prev-q"
+                  type="button"
+                  onClick={handlePrev}
+                  className="btn-ghost typeform-arrow-btn"
+                  style={{ visibility: activeStepIndex === 0 ? 'hidden' : 'visible' }}
                 >
-                  {answeredCount >= totalCount
-                    ? 'Reflection complete · Ready for your portrait'
-                    : `${answeredCount} of ${totalCount} answered · Take your time`}
-                </span>
+                  ↑ Back
+                </button>
+                <button
+                  id="btn-next-q"
+                  type="button"
+                  onClick={handleNext}
+                  className="btn-ghost typeform-arrow-btn"
+                >
+                  {activeStepIndex === totalStepsCount - 1 ? 'See My Portrait →' : 'Next ↓'}
+                </button>
               </div>
+
+              <div className="typeform-footer-meta">
+                <span id="live-emerging-code" className="typeform-kbd-hint">
+                  {answeredQuestionsCount >= totalQuestionsCount
+                    ? 'All questions answered · Ready for your portrait'
+                    : `Press 1–5 or tap to answer · ${answeredQuestionsCount}/${totalQuestionsCount} answered`}
+                </span>
+                {(answeredQuestionsCount > 0 || completedMomentsCount > 0) && (
+                  <button
+                    id="btn-reset-reflection"
+                    type="button"
+                    onClick={onResetProgress}
+                    className="typeform-reset-link"
+                  >
+                    Start Fresh ↺
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Subtle Inline Controls for 3 Everyday Habits & Direct Mind Moments */}
+            <div className="typeform-subtle-extras">
               <button
-                id="btn-next-q"
+                id="btn-toggle-sneaky-habits"
                 type="button"
-                onClick={handleNext}
-                className="btn-ghost"
-                style={{ color: 'var(--text)', borderColor: 'rgba(255,255,255,0.18)' }}
+                onClick={() => {
+                  const nextVal = !includeSneakyBonus;
+                  onToggleSneakyBonus(nextVal);
+                }}
+                className="typeform-extra-link"
               >
-                {safeIdx === totalCount - 1 ? 'See My Portrait →' : 'Next →'}
+                {includeSneakyBonus
+                  ? '✓ 3 Everyday Habit Moments Included (15 Qs)'
+                  : '+ Include 3 Everyday Habit Moments (Browser Tabs, Texting & Plans)'}
+              </button>
+              <span className="typeform-extra-dot">·</span>
+              <button
+                type="button"
+                onClick={() => onFinishToPortrait()}
+                className="typeform-extra-link"
+              >
+                Jump to My Portrait →
               </button>
             </div>
-          </div>
-
-          {/* Bonus Toggle for the 3 "Sneaky Everyday Habits" Questions (#13, #14, #15) */}
-          <div
-            className="card-subtle"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '11px 15px',
-              marginBottom: '10px',
-              borderColor: includeSneakyBonus
-                ? 'rgba(251, 191, 36, 0.38)'
-                : 'rgba(255, 255, 255, 0.08)',
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: includeSneakyBonus ? 'var(--amber)' : 'var(--text)',
-                }}
-              >
-                ✦ 3 Everyday Habit Moments (Browser Tabs, Texting &amp; Canceled Plans)
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Lighthearted, real-life habits that help discover your natural pace without clinical
-                labels.
-              </div>
-            </div>
-            <button
-              id="btn-toggle-sneaky-habits"
-              type="button"
-              onClick={() => {
-                const nextVal = !includeSneakyBonus;
-                setIncludeSneakyBonus(nextVal);
-                if (nextVal && safeIdx === 11) {
-                  onSetCurrentQIdx(12);
-                }
-              }}
-              className="btn-ghost"
-              style={{
-                whiteSpace: 'nowrap',
-                fontSize: '11.5px',
-                color: includeSneakyBonus ? 'var(--amber)' : '#c4b5fd',
-                borderColor: includeSneakyBonus
-                  ? 'rgba(251, 191, 36, 0.45)'
-                  : 'rgba(167, 139, 250, 0.3)',
-              }}
-            >
-              {includeSneakyBonus ? '✓ Included (15)' : '+ Include 3 Habits'}
-            </button>
-          </div>
-
-          {/* Card to switch to 3 Mind Moments */}
-          <div
-            className="card-subtle"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 16px',
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text)' }}>
-                Want to include your 3 Mind Moments?
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                Three calm, 10-second interactive moments for reaction rhythm, pattern memory &amp;
-                your mind’s eye.
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onSwitchReflectPart('moments')}
-              className="btn-ghost"
-              style={{
-                whiteSpace: 'nowrap',
-                color: '#c4b5fd',
-                borderColor: 'rgba(167,139,250,0.3)',
-              }}
-            >
-              Open Moments →
-            </button>
           </div>
         </div>
       )}
 
-      {/* Part 2: Three Interactive Mind Moments */}
-      {reflectPart === 'moments' && (
-        <div id="reflect-part-moments">
-          <div className="glass-card" style={{ marginBottom: '12px' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: '10px',
-                marginBottom: '10px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div>
-                <span className="soft-pill" style={{ marginBottom: '6px' }}>
-                  ✦ Three Gentle Mind Moments · 30 Seconds
-                </span>
-                <h2 className="serif" style={{ fontSize: '26px', lineHeight: 1.18 }}>
-                  Experience how your attention &amp; inner imagery move
-                </h2>
-              </div>
+      {/* ====================================================================
+          ACTIVE STEP: MIND MOMENT INTERLUDE (Borderless Full-Screen Canvas)
+         ==================================================================== */}
+      {activeStep.kind === 'moment' && (
+        <div id="reflect-part-moments" className="typeform-canvas-wrap">
+          <div className="typeform-moment-stage">
+            <div className="typeform-eyebrow-row" style={{ marginBottom: '12px' }}>
+              <span className="typeform-eyebrow-step">
+                STEP {String(activeStepIndex + 1).padStart(2, '0')} OF{' '}
+                {String(totalStepsCount).padStart(2, '0')}
+              </span>
+              <span className="typeform-eyebrow-sep">→</span>
+              <span className="typeform-eyebrow-theme">{activeStep.momentSubtitle}</span>
+              <span id="step-url-slug-badge" className="typeform-slug-pill mono">
+                ?step={activeStep.slug}
+              </span>
             </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '14px' }}>
-              These three quiet activities take just a few seconds each. They help your portrait
-              honor your natural reaction pace, your visual pattern memory, and how your mind’s eye
-              pictures ideas.
-            </p>
 
             <MindMoments
+              activeMomentIndex={activeStep.momentIndex}
+              nextStepLabel={nextStepAfterMomentLabel}
+              onSelectMomentIndex={(idx) => {
+                onNavigateStepSlug(MIND_MOMENT_SLUGS[idx], true);
+              }}
+              onCompleteSingleMoment={handleCompleteSingleMoment}
               onAllComplete={(tel) => {
                 onFinishToPortrait(tel);
               }}
             />
 
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: '16px',
-                paddingTop: '14px',
-                borderTop: '1px solid var(--border)',
-                gap: '10px',
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className="typeform-footer-bar" style={{ marginTop: '18px' }}>
               <button
                 type="button"
-                onClick={() => onSwitchReflectPart('questions')}
-                className="btn-ghost"
+                onClick={handlePrev}
+                className="btn-ghost typeform-arrow-btn"
               >
-                ← Back to Quiet Questions
+                ← Previous Step
               </button>
               <button
                 type="button"
                 onClick={() => onFinishToPortrait()}
-                className="btn-primary"
-                style={{ width: 'auto', padding: '11px 20px' }}
+                className="btn-ghost typeform-arrow-btn"
+                style={{ color: '#c4b5fd', borderColor: 'rgba(167, 139, 250, 0.35)' }}
               >
                 See My Quiet Portrait →
               </button>
