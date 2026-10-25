@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ARCHETYPES,
   AURA_SCIENCE_BUNDLE,
@@ -33,7 +33,14 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
   onUnlockPro,
   onSharePortrait,
 }) => {
+  const [chapter, setChapter] = useState<0 | 1 | 2 | 3>(0);
   const radarCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (proUnlocked) {
+      setChapter(3);
+    }
+  }, [proUnlocked]);
 
   useEffect(() => {
     if (!decomposition || !radarCanvasRef.current) return;
@@ -70,7 +77,6 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
       ctx.stroke();
     }
 
-    // Typical Rhythm Baseline polygon (Warm Amber dashed)
     ctx.beginPath();
     for (let i = 0; i < 5; i++) {
       const ang = (Math.PI * 2 * i) / 5 - Math.PI / 2;
@@ -87,7 +93,6 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Your Portrait polygon (Soft Lavender)
     ctx.beginPath();
     for (let i = 0; i < 5; i++) {
       const ang = (Math.PI * 2 * i) / 5 - Math.PI / 2;
@@ -104,7 +109,6 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    // Labels
     ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
     ctx.fillStyle = '#cbd5e1';
     ctx.textAlign = 'center';
@@ -115,7 +119,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
       const ly = cy + Math.sin(ang) * (R + 20);
       ctx.fillText(labels[i], lx, ly);
     }
-  }, [decomposition]);
+  }, [decomposition, chapter]);
 
   if (!decomposition) return null;
 
@@ -152,210 +156,119 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
     { name: 'Sensitivity to Sudden Shifts', val: asp.N_volatility },
   ];
 
+  const CHAPTERS = [
+    { idx: 0 as const, label: '1. Rhythm' },
+    { idx: 1 as const, label: '2. Dimensions' },
+    { idx: 2 as const, label: '3. Mind & Setting' },
+    { idx: 3 as const, label: '4. 10 Nuances' },
+  ];
+
   return (
     <section id="view-blueprint" className="view-section active">
-      {/* Card 1: Your Core Portrait */}
-      <div className="glass-card" style={{ marginBottom: '14px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '10px',
-            gap: '8px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span
-              id="bp-active-mask-badge"
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: 'var(--amber)',
-                background: 'var(--amber-soft)',
-                padding: '4px 11px',
-                borderRadius: '999px',
-              }}
+      {/* Chapter Stepper Bar */}
+      <div className="chapter-stepper-bar">
+        <div className="chapter-pills">
+          {CHAPTERS.map((ch) => (
+            <button
+              key={ch.idx}
+              type="button"
+              onClick={() => setChapter(ch.idx)}
+              className={`chapter-pill ${chapter === ch.idx ? 'active' : ''}`}
             >
+              {ch.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onSharePortrait}
+          className="aura-inline-text-btn"
+          style={{ color: '#c4b5fd' }}
+        >
+          Share ↗
+        </button>
+      </div>
+
+      {/* ====================================================================
+          CHAPTER 1: CORE PORTRAIT & NATURAL RHYTHM
+         ==================================================================== */}
+      <div className={`portrait-chapter ${chapter === 0 ? 'active' : ''}`}>
+        <div style={{ marginBottom: '18px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
+            <span id="bp-active-mask-badge" className="typeform-eyebrow-step">
               {calmRhythmTitle}
             </span>
-            <span
-              id="bp-mbti-badge"
-              style={{
-                fontSize: '11px',
-                fontWeight: 500,
-                color: '#f472b6',
-                background: 'var(--rose-soft)',
-                padding: '4px 11px',
-                borderRadius: '999px',
-              }}
-            >
+            <span style={{ color: 'var(--text-dim)' }}>·</span>
+            <span id="bp-mbti-badge" className="typeform-eyebrow-theme">
               {arch.vibe || 'Quiet Depth & Warmth'}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onSharePortrait}
-            className="btn-ghost"
-            style={{
-              padding: '5px 12px',
-              fontSize: '11.5px',
-              color: '#c4b5fd',
-              borderColor: 'rgba(167,139,250,0.3)',
-            }}
-          >
-            Share Portrait ↗
-          </button>
-        </div>
-        <div
-          id="blueprint-owner-title"
-          style={{
-            fontSize: '12px',
-            color: 'var(--text-dim)',
-            fontWeight: 500,
-            marginBottom: '3px',
-          }}
-        >
-          {userName}’s Quiet Mind Portrait
-        </div>
-        <h2
-          id="bp-archetype-title"
-          className="serif"
-          style={{ fontSize: '30px', lineHeight: 1.15, marginBottom: '8px' }}
-        >
-          {arch.title}
-        </h2>
-        <p
-          id="bp-archetype-summary"
-          style={{ fontSize: '13.5px', color: 'var(--text-muted)', lineHeight: 1.6 }}
-        >
-          {arch.summary}
-        </p>
-      </div>
 
-      {/* Card 2: Your Natural Rhythm (Discovered Automatically) */}
-      <div className="glass-card" style={{ marginBottom: '14px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '8px',
-            flexWrap: 'wrap',
-            marginBottom: '6px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              color: 'var(--amber)',
-              letterSpacing: '0.03em',
-              textTransform: 'uppercase',
-            }}
+          <div
+            id="blueprint-owner-title"
+            style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '2px' }}
           >
-            Your Natural Rhythm · Discovered Automatically
-          </span>
-          <span
-            id="bp-rhythm-badge"
-            style={{
-              fontSize: '11px',
-              color: 'var(--emerald)',
-              background: 'var(--emerald-soft)',
-              padding: '3px 10px',
-              borderRadius: '999px',
-            }}
+            {userName}’s Quiet Mind Portrait
+          </div>
+          <h2
+            id="bp-archetype-title"
+            className="serif"
+            style={{ fontSize: '30px', lineHeight: 1.15, marginBottom: '8px' }}
           >
-            {calmRhythmBadge}
-          </span>
+            {arch.title}
+          </h2>
+          <p
+            id="bp-archetype-summary"
+            style={{ fontSize: '13.5px', color: 'var(--text-muted)', lineHeight: 1.55 }}
+          >
+            {arch.summary}
+          </p>
         </div>
-        <h3
-          id="bp-rhythm-title"
-          className="serif"
-          style={{ fontSize: '25px', lineHeight: 1.2, marginBottom: '8px' }}
-        >
-          {calmRhythmTitle}
-        </h3>
 
-        <div className="card-subtle" style={{ padding: '14px 16px', marginBottom: '12px' }}>
+        <div className="open-divider-section">
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '4px',
+            }}
+          >
+            <span className="typeform-eyebrow-step" style={{ color: 'var(--amber)' }}>
+              Natural Rhythm
+            </span>
+            <span
+              id="bp-rhythm-badge"
+              style={{ fontSize: '11px', color: 'var(--emerald)', fontWeight: 600 }}
+            >
+              {calmRhythmBadge}
+            </span>
+          </div>
+          <h3
+            id="bp-rhythm-title"
+            className="serif"
+            style={{ fontSize: '23px', lineHeight: 1.2, marginBottom: '6px' }}
+          >
+            {calmRhythmTitle}
+          </h3>
           <p
             id="bp-mask-mechanism"
-            style={{
-              fontSize: '13px',
-              color: 'var(--text)',
-              lineHeight: 1.58,
-              marginBottom: '8px',
-            }}
+            style={{ fontSize: '13px', color: 'var(--text)', lineHeight: 1.5, marginBottom: '6px' }}
           >
             {maskApplied.calm_summary}
           </p>
           <p
             id="bp-mask-diagnostic"
-            style={{ fontSize: '12.5px', color: 'var(--emerald)', lineHeight: 1.52 }}
+            style={{ fontSize: '12.5px', color: 'var(--emerald)', lineHeight: 1.48, marginBottom: '10px' }}
           >
             {maskApplied.calm_reframe}
           </p>
-        </div>
 
-        {/* Gentle Callouts: Quiet Effort & Current Season */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr',
-            gap: '10px',
-            marginBottom: '12px',
-          }}
-          className="calm-notes-grid"
-        >
-          <div
-            className="card-subtle"
-            style={{ padding: '12px 14px', borderColor: 'rgba(167,139,250,0.2)' }}
-          >
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#c4b5fd',
-                marginBottom: '3px',
-              }}
-            >
-              ✦ Quiet Effort Behind the Scenes
-            </div>
-            <p
-              id="bp-calm-masking-note"
-              style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.5 }}
-            >
-              {decomposition.calm_notes?.masking_note}
-            </p>
+          <div style={{ display: 'none' }}>
+            <span id="bp-calm-masking-note">{decomposition.calm_notes?.masking_note}</span>
+            <span id="bp-calm-season-note">{decomposition.calm_notes?.season_note}</span>
           </div>
-          <div
-            className="card-subtle"
-            style={{ padding: '12px 14px', borderColor: 'rgba(56,189,248,0.2)' }}
-          >
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: 'var(--sky)',
-                marginBottom: '3px',
-              }}
-            >
-              ◎ Honoring Your Current Season
-            </div>
-            <p
-              id="bp-calm-season-note"
-              style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.5 }}
-            >
-              {decomposition.calm_notes?.season_note}
-            </p>
-          </div>
-        </div>
 
-        <div>
-          <div style={{ fontSize: '11.5px', color: 'var(--text-dim)', marginBottom: '7px' }}>
-            Curious how another natural rhythm feels? Explore below:
-          </div>
           <div id="bp-mask-pills" className="mask-pill-row">
             {masks.map((m) => {
               const active = m.id === maskApplied.id;
@@ -377,450 +290,60 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
         </div>
       </div>
 
-      {/* Card 3: How Your Inner Mind Works (From Your 3 Mind Moments) */}
-      <div className="glass-card" style={{ marginBottom: '14px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '8px',
-            flexWrap: 'wrap',
-            marginBottom: '10px',
-          }}
-        >
+      {/* ====================================================================
+          CHAPTER 2: FIVE DIMENSIONS & PORTRAIT SHAPE
+         ==================================================================== */}
+      <div className={`portrait-chapter ${chapter === 1 ? 'active' : ''}`}>
+        <div className="desktop-grid">
           <div>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#c4b5fd',
-                letterSpacing: '0.03em',
-                textTransform: 'uppercase',
-              }}
-            >
-              From Your Three Mind Moments
-            </span>
-            <h3 className="serif" style={{ fontSize: '23px', lineHeight: 1.2 }}>
-              How Your Inner Mind Works
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenMindMoments}
-            className="btn-ghost"
-            style={{ fontSize: '11.5px', padding: '6px 11px' }}
-          >
-            Play Mind Moments →
-          </button>
-        </div>
-
-        <div id="bp-mind-moments-grid" className="setting-grid">
-          <div className="card-subtle" style={{ padding: '13px' }}>
-            <div
-              style={{
-                fontSize: '11px',
-                color: 'var(--rose)',
-                fontWeight: 600,
-                marginBottom: '3px',
-              }}
-            >
-              Inner Canvas · Mind’s Eye
-            </div>
-            <div
-              id="moment-minds-eye-title"
-              style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                color: 'var(--text)',
-                marginBottom: '4px',
-              }}
-            >
-              {cleanMindsEyeTitle}
-            </div>
-            <p
-              id="moment-minds-eye-desc"
-              style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.48 }}
-            >
-              {tel?.minds_eye_calm_note}
-            </p>
-          </div>
-          <div className="card-subtle" style={{ padding: '13px' }}>
-            <div
-              style={{
-                fontSize: '11px',
-                color: 'var(--sky)',
-                fontWeight: 600,
-                marginBottom: '3px',
-              }}
-            >
-              Still Water · Attentional Rhythm
-            </div>
-            <div
-              id="moment-still-water-title"
-              style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                color: 'var(--text)',
-                marginBottom: '4px',
-              }}
-            >
-              {tel?.attentional_cadence_label || 'Steady & Present'}
-            </div>
-            <p
-              id="moment-still-water-desc"
-              style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.48 }}
-            >
-              {tel?.attentional_cadence_calm_note}
-            </p>
-          </div>
-          <div className="card-subtle" style={{ padding: '13px' }}>
-            <div
-              style={{
-                fontSize: '11px',
-                color: 'var(--amber)',
-                fontWeight: 600,
-                marginBottom: '3px',
-              }}
-            >
-              Night Sky · Pattern Memory
-            </div>
-            <div
-              id="moment-night-sky-title"
-              style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                color: 'var(--text)',
-                marginBottom: '4px',
-              }}
-            >
-              {tel?.pattern_memory_label || 'Whole-Constellation Memory'}
-            </div>
-            <p
-              id="moment-night-sky-desc"
-              style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.48 }}
-            >
-              {tel?.pattern_memory_calm_note}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 4: How Your Energy Shifts by Setting */}
-      <div className="glass-card" style={{ marginBottom: '14px' }}>
-        <div style={{ marginBottom: '10px' }}>
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              color: 'var(--emerald)',
-              letterSpacing: '0.03em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Context Matters
-          </span>
-          <h3 className="serif" style={{ fontSize: '23px', lineHeight: 1.2 }}>
-            How Your Energy Shifts by Setting
-          </h3>
-          <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            You aren’t a single fixed number—your energy opens up when the setting matches how you
-            are built.
-          </p>
-        </div>
-
-        <div className="setting-grid">
-          <div className="card-subtle" style={{ padding: '13px' }}>
-            <div
-              style={{
-                fontSize: '11.5px',
-                fontWeight: 600,
-                color: 'var(--text)',
-                marginBottom: '6px',
-              }}
-            >
-              Everyday Errands vs. Deep Curiosity
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: '8px',
-                marginBottom: '5px',
-              }}
-            >
-              <span
-                id="gate-routine-c"
-                style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: 600 }}
-              >
-                {Math.round(gate.routine_conscientiousness)}%
-              </span>
-              <span style={{ color: 'var(--text-dim)' }}>→</span>
-              <strong
-                id="gate-salience-c"
-                style={{ fontSize: '21px', color: 'var(--emerald)' }}
-              >
-                {Math.round(gate.salience_locked_drive)}%
-              </strong>
-            </div>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-              Routine checklists vs. when a question or project genuinely matters to you.
-            </p>
-          </div>
-
-          <div className="card-subtle" style={{ padding: '13px' }}>
-            <div
-              style={{
-                fontSize: '11.5px',
-                fontWeight: 600,
-                color: 'var(--text)',
-                marginBottom: '6px',
-              }}
-            >
-              Busy Rooms vs. One-on-One
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: '8px',
-                marginBottom: '5px',
-              }}
-            >
-              <span
-                id="gate-crowd-e"
-                style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: 600 }}
-              >
-                {Math.round(gate.crowd_foraging_extraversion)}%
-              </span>
-              <span style={{ color: 'var(--text-dim)' }}>→</span>
-              <strong id="gate-dyadic-e" style={{ fontSize: '21px', color: 'var(--sky)' }}>
-                {Math.round(gate.dyadic_1on1_capacity)}%
-              </strong>
-            </div>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-              Noisy group energy vs. warm, unhurried connection with one person.
-            </p>
-          </div>
-
-          <div className="card-subtle" style={{ padding: '13px' }}>
-            <div
-              style={{
-                fontSize: '11.5px',
-                fontWeight: 600,
-                color: 'var(--text)',
-                marginBottom: '6px',
-              }}
-            >
-              What You Notice vs. Inner Calm
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: '8px',
-                marginBottom: '5px',
-              }}
-            >
-              <strong id="gate-signal-o" style={{ fontSize: '21px', color: 'var(--accent)' }}>
-                {Math.round(gate.perceptual_signal_resolution)}%
-              </strong>
-              <span style={{ color: 'var(--text-dim)' }}>/</span>
-              <span
-                id="gate-dysreg-n"
-                style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: 600 }}
-              >
-                {Math.round(gate.true_affective_dysregulation)}%
-              </span>
-            </div>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-              How deeply you take in atmosphere and nuance vs. how much tension you carry.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 5: Your Five Dimensions & What Makes You Uniquely You */}
-      <div className="desktop-grid" style={{ marginBottom: '14px' }}>
-        <div className="glass-card">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'baseline',
-              marginBottom: '8px',
-              flexWrap: 'wrap',
-              gap: '6px',
-            }}
-          >
-            <h3 className="serif" style={{ fontSize: '23px', lineHeight: 1.2 }}>
+            <h3 className="serif" style={{ fontSize: '25px', marginBottom: '8px' }}>
               Your Five Dimensions
             </h3>
-            <span
-              style={{
-                fontSize: '11px',
-                color: 'var(--amber)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: 'var(--amber)',
-                }}
-              />
-              Typical for your rhythm
-            </span>
-          </div>
-          <div id="bp-decomp-bars">
-            {(['O', 'C', 'E', 'A', 'N'] as DomainKey[]).map((k) => {
-              const meta = CALM_DIMENSION_LABELS[k];
-              const debV = layers.debiased_scores[k];
-              const bWire = layers.hardware_baseline[k];
-              const deltaP = layers.residual_personality[k];
-              const diffLabel =
-                Math.abs(deltaP) < 3
-                  ? `Right in step with a typical ${calmRhythmTitle}`
-                  : deltaP > 0
-                  ? `+${Math.round(deltaP)}% above typical for ${calmRhythmTitle}`
-                  : `${Math.round(deltaP)}% gentler than typical for ${calmRhythmTitle}`;
-
-              return (
-                <div key={k} className="decomp-row">
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: '8px',
-                      marginBottom: '6px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                      <span
-                        style={{
-                          fontSize: '13.5px',
-                          fontWeight: 600,
-                          color: 'var(--text)',
-                          lineHeight: 1.25,
-                        }}
-                      >
-                        {meta.name}
-                      </span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-                        {meta.subtitle}
-                      </span>
-                    </div>
-                    <span
+            <div id="bp-decomp-bars">
+              {(['O', 'C', 'E', 'A', 'N'] as DomainKey[]).map((k) => {
+                const meta = CALM_DIMENSION_LABELS[k];
+                const debV = layers.debiased_scores[k];
+                const bWire = layers.hardware_baseline[k];
+                return (
+                  <div key={k} className="decomp-row" style={{ padding: '9px 0' }}>
+                    <div
                       style={{
-                        fontSize: '13.5px',
-                        fontWeight: 700,
-                        color: 'var(--accent)',
-                        flexShrink: 0,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginBottom: '4px',
                       }}
                     >
-                      {Math.round(debV)}%
-                    </span>
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{meta.name}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent)' }}>
+                        {Math.round(debV)}%
+                      </span>
+                    </div>
+                    <div className="spectrum-track">
+                      <div
+                        className="spectrum-fill"
+                        style={{ width: `${debV}%`, background: DOMAIN_COLORS[k] }}
+                      />
+                      <div className="baseline-marker" style={{ left: `${bWire}%` }} />
+                    </div>
                   </div>
-                  <div
-                    className="spectrum-track"
-                    title={`Warm amber dot = Typical for ${calmRhythmTitle} (${Math.round(
-                      bWire
-                    )}%)`}
-                  >
-                    <div
-                      className="spectrum-fill"
-                      style={{ width: `${debV}%`, background: DOMAIN_COLORS[k] }}
-                    />
-                    <div className="baseline-marker" style={{ left: `${bWire}%` }} />
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginTop: '6px',
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    <span>
-                      Typical for your rhythm:{' '}
-                      <strong style={{ color: 'var(--amber)' }}>{Math.round(bWire)}%</strong>
-                    </span>
-                    <span style={{ color: 'var(--emerald)' }}>{diffLabel}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div
-          className="glass-card"
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-        >
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '6px',
-            }}
-          >
-            <h3 className="serif" style={{ fontSize: '22px', lineHeight: 1.2 }}>
-              Portrait Shape
-            </h3>
-            <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-              You (Lavender) · Rhythm (Amber)
-            </span>
-          </div>
-          <canvas
-            id="blueprint-radar"
-            ref={radarCanvasRef}
-            width={290}
-            height={245}
-            style={{ maxWidth: '100%' }}
-          />
-
-          <div
-            style={{
-              width: '100%',
-              marginTop: '10px',
-              paddingTop: '12px',
-              borderTop: '1px solid var(--border)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '11.5px',
-                fontWeight: 600,
-                color: 'var(--emerald)',
-                marginBottom: '6px',
-              }}
-            >
-              ✦ What Makes You Uniquely You
+                );
+              })}
             </div>
-            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              Even among people who share your natural rhythm, these qualities stand out as
-              distinctly yours:
-            </p>
-            <div id="bp-unique-divergences">
-              {decomposition.top_unique_divergences.map((d) => (
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <canvas
+              id="blueprint-radar"
+              ref={radarCanvasRef}
+              width={250}
+              height={200}
+              style={{ maxWidth: '100%' }}
+            />
+            <div id="bp-unique-divergences" style={{ width: '100%', marginTop: '6px' }}>
+              {decomposition.top_unique_divergences.slice(0, 2).map((d) => (
                 <div
                   key={d.domain}
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    padding: '7px 0',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                  }}
+                  style={{ fontSize: '11.5px', color: 'var(--text-muted)', padding: '4px 0' }}
                 >
                   <strong style={{ color: 'var(--text)' }}>{d.domain_name}:</strong>{' '}
                   {d.interpretation}
@@ -831,26 +354,125 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
         </div>
       </div>
 
-      {/* Card 6: Full 10-Nuance Guide ($9 Freemium Unlock with 1-tap Demo Preview) */}
-      <div className="glass-card" style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* ====================================================================
+          CHAPTER 3: INNER MIND & SETTING SHIFTS
+         ==================================================================== */}
+      <div className={`portrait-chapter ${chapter === 2 ? 'active' : ''}`}>
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '10px',
+            marginBottom: '8px',
           }}
         >
-          <div>
-            <h3 className="serif" style={{ fontSize: '23px', lineHeight: 1.2 }}>
-              Full 10-Nuance Guide &amp; Ideal Setting
-            </h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              A closer look at your ten subtle strengths, gentle watch-outs, and where you thrive
-            </p>
-          </div>
-          <span className="soft-pill">Full Guide</span>
+          <h3 className="serif" style={{ fontSize: '25px' }}>
+            Inner Mind &amp; Setting Shifts
+          </h3>
+          <button
+            type="button"
+            onClick={onOpenMindMoments}
+            className="aura-inline-text-btn"
+            style={{ color: '#c4b5fd' }}
+          >
+            Replay Moments →
+          </button>
         </div>
+
+        <div id="bp-mind-moments-grid" className="setting-grid" style={{ marginBottom: '16px' }}>
+          <div className="compact-stat-row">
+            <span style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 600 }}>
+              Mind’s Eye
+            </span>
+            <strong id="moment-minds-eye-title" style={{ fontSize: '13.5px' }}>
+              {cleanMindsEyeTitle}
+            </strong>
+            <span id="moment-minds-eye-desc" style={{ display: 'none' }}>
+              {tel?.minds_eye_calm_note}
+            </span>
+          </div>
+          <div className="compact-stat-row">
+            <span style={{ fontSize: '11px', color: 'var(--sky)', fontWeight: 600 }}>
+              Still Water
+            </span>
+            <strong id="moment-still-water-title" style={{ fontSize: '13.5px' }}>
+              {tel?.attentional_cadence_label || 'Steady & Present'}
+            </strong>
+            <span id="moment-still-water-desc" style={{ display: 'none' }}>
+              {tel?.attentional_cadence_calm_note}
+            </span>
+          </div>
+          <div className="compact-stat-row">
+            <span style={{ fontSize: '11px', color: 'var(--amber)', fontWeight: 600 }}>
+              Night Sky
+            </span>
+            <strong id="moment-night-sky-title" style={{ fontSize: '13.5px' }}>
+              {tel?.pattern_memory_label || 'Whole-Constellation Memory'}
+            </strong>
+            <span id="moment-night-sky-desc" style={{ display: 'none' }}>
+              {tel?.pattern_memory_calm_note}
+            </span>
+          </div>
+        </div>
+
+        <div className="setting-grid">
+          <div className="compact-stat-row">
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Routine vs. Deep Curiosity
+            </span>
+            <div>
+              <span id="gate-routine-c" style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
+                {Math.round(gate.routine_conscientiousness)}%
+              </span>{' '}
+              →{' '}
+              <strong id="gate-salience-c" style={{ fontSize: '16px', color: 'var(--emerald)' }}>
+                {Math.round(gate.salience_locked_drive)}%
+              </strong>
+            </div>
+          </div>
+
+          <div className="compact-stat-row">
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Crowds vs. One-on-One
+            </span>
+            <div>
+              <span id="gate-crowd-e" style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
+                {Math.round(gate.crowd_foraging_extraversion)}%
+              </span>{' '}
+              →{' '}
+              <strong id="gate-dyadic-e" style={{ fontSize: '16px', color: 'var(--sky)' }}>
+                {Math.round(gate.dyadic_1on1_capacity)}%
+              </strong>
+            </div>
+          </div>
+
+          <div className="compact-stat-row">
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Perceptiveness vs. Tension
+            </span>
+            <div>
+              <strong id="gate-signal-o" style={{ fontSize: '16px', color: 'var(--accent)' }}>
+                {Math.round(gate.perceptual_signal_resolution)}%
+              </strong>{' '}
+              /{' '}
+              <span id="gate-dysreg-n" style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
+                {Math.round(gate.true_affective_dysregulation)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ====================================================================
+          CHAPTER 4: FULL 10-NUANCE GUIDE
+         ==================================================================== */}
+      <div
+        className={`portrait-chapter ${chapter === 3 ? 'active' : ''}`}
+        style={{ position: 'relative' }}
+      >
+        <h3 className="serif" style={{ fontSize: '25px', marginBottom: '8px' }}>
+          Full 10-Nuance Guide
+        </h3>
 
         <div
           id="pro-lock-blur"
@@ -864,8 +486,8 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             id="bp-aspects-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr',
-              gap: '6px',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '6px 14px',
               marginBottom: '12px',
             }}
           >
@@ -875,54 +497,30 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  background: 'rgba(255,255,255,0.025)',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(255,255,255,0.05)',
+                  padding: '5px 0',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  fontSize: '11.5px',
                 }}
               >
-                <span style={{ fontSize: '12px', color: 'var(--text)' }}>{a.name}</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent)' }}>
-                  {Math.round(a.val)}%
-                </span>
+                <span style={{ color: 'var(--text-muted)' }}>{a.name}</span>
+                <strong style={{ color: 'var(--accent)' }}>{Math.round(a.val)}%</strong>
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div className="card-subtle">
-              <div
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: 'var(--rose)',
-                  marginBottom: '4px',
-                }}
-              >
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--rose)' }}>
                 Gentle Watch-Out
               </div>
-              <p
-                id="bp-blindspot-text"
-                style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}
-              >
+              <p id="bp-blindspot-text" style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
                 {arch.blindspot}
               </p>
             </div>
-            <div className="card-subtle">
-              <div
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: 'var(--emerald)',
-                  marginBottom: '4px',
-                }}
-              >
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--emerald)' }}>
                 Where You Thrive
               </div>
-              <p
-                id="bp-env-text"
-                style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}
-              >
+              <p id="bp-env-text" style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
                 {arch.environment}
               </p>
             </div>
@@ -934,22 +532,17 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             id="pro-lock-cta"
             style={{
               position: 'absolute',
-              inset: '58px 12px 12px',
-              background: 'rgba(8,9,16,0.86)',
+              inset: '36px 0 0',
+              background: 'rgba(8,9,16,0.88)',
               backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(167,139,250,0.3)',
-              borderRadius: '18px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '18px',
+              padding: '16px',
               textAlign: 'center',
             }}
           >
-            <div className="soft-pill" style={{ marginBottom: '6px' }}>
-              ✦ Complete Portrait Guide
-            </div>
             <h4 className="serif" style={{ fontSize: '23px', marginBottom: '6px' }}>
               Unlock Your Full 10-Nuance Guide
             </h4>
@@ -957,22 +550,56 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
               style={{
                 fontSize: '12.5px',
                 color: 'var(--text-muted)',
-                maxWidth: '310px',
+                maxWidth: '300px',
                 marginBottom: '14px',
               }}
             >
               Explore all 10 personal nuances, what drains vs. restores your focus, and your
-              printable keepsake guide.
+              keepsake guide.
             </p>
             <button
               type="button"
               onClick={() => onUnlockPro('Opened Full 10-Nuance Guide (Preview)')}
               className="btn-primary"
-              style={{ maxWidth: '260px', padding: '11px 18px', fontSize: '13px' }}
+              style={{ maxWidth: '250px', padding: '10px 16px', fontSize: '13px' }}
             >
               Unlock Full Guide · $9 (Tap Preview)
             </button>
           </div>
+        )}
+      </div>
+
+      {/* Chapter Next / Prev Navigation */}
+      <div className="chapter-footer-nav">
+        <button
+          type="button"
+          onClick={() => setChapter((prev) => Math.max(0, prev - 1) as 0 | 1 | 2 | 3)}
+          className="aura-inline-text-btn"
+          style={{ visibility: chapter === 0 ? 'hidden' : 'visible' }}
+        >
+          ← Previous
+        </button>
+        <span className="mono" style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+          {chapter + 1} / 4
+        </span>
+        {chapter < 3 ? (
+          <button
+            type="button"
+            onClick={() => setChapter((prev) => Math.min(3, prev + 1) as 0 | 1 | 2 | 3)}
+            className="aura-inline-text-btn"
+            style={{ color: '#c4b5fd' }}
+          >
+            Next Chapter →
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onSharePortrait}
+            className="aura-inline-text-btn"
+            style={{ color: '#34d399' }}
+          >
+            Share Portrait ↗
+          </button>
         )}
       </div>
     </section>

@@ -38,7 +38,6 @@ interface PersistedConsumerProgress {
   responses?: Record<number, number>;
   telemetry?: TelemetryState;
   currentStepSlug?: string;
-  includeSneakyBonus?: boolean;
   userMaskId?: string;
 }
 
@@ -126,15 +125,12 @@ export const App: React.FC = () => {
 
   const savedProgress = useMemo(() => loadSavedProgress(), []);
 
-  // Hydrate telemetry bridge if saved progress exists
   useEffect(() => {
     if (savedProgress?.telemetry) {
       AuraMicroGamesBridge.setState(savedProgress.telemetry);
     }
   }, [savedProgress]);
 
-  // Welcome & Loader Modal State
-  // Show welcome screen on fresh root visit unless deep-linked to a specific step/view beyond q-01
   const [welcomeVisible, setWelcomeVisible] = useState<boolean>(() => {
     if (
       initialUrlState.initialTab !== 'test' ||
@@ -151,7 +147,6 @@ export const App: React.FC = () => {
   const [loaderMsg, setLoaderMsg] = useState<string>('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Navigation & URL Slug State
   const [activeTab, setActiveTab] = useState<MainTab>(initialUrlState.initialTab);
   const [reflectPart, setReflectPart] = useState<'questions' | 'moments'>(
     initialUrlState.initialPart
@@ -162,11 +157,7 @@ export const App: React.FC = () => {
     }
     return savedProgress?.currentStepSlug || QUESTION_SLUG_MAP[1];
   });
-  const [includeSneakyBonus, setIncludeSneakyBonus] = useState<boolean>(() => {
-    return Boolean(savedProgress?.includeSneakyBonus);
-  });
 
-  // User Reflection State (MUST start completely empty `{}` on a fresh session!)
   const [userName, setUserName] = useState<string>(() => savedProgress?.userName || 'Alex');
   const [responses, setResponses] = useState<Record<number, number>>(() => {
     if (savedProgress?.responses && typeof savedProgress.responses === 'object') {
@@ -196,7 +187,6 @@ export const App: React.FC = () => {
   const [proUnlocked, setProUnlocked] = useState<boolean>(false);
   const [decomposition, setDecomposition] = useState<DecompositionResult | null>(null);
 
-  // Together / Relationship Harmony State
   const [chemMode, setChemMode] = useState<'partner' | 'cofounder' | 'friend'>('partner');
   const [partnerName, setPartnerName] = useState<string>('Jordan');
   const [partnerScores, setPartnerScores] = useState<Record<DomainKey, number>>({
@@ -210,7 +200,6 @@ export const App: React.FC = () => {
   const [activeSliderTarget, setActiveSliderTarget] = useState<'user' | 'partner'>('user');
   const [chemistry, setChemistry] = useState<ChemistryResult | null>(null);
 
-  // Questions & Flows State (synced from backend active flow)
   const [studioQuestions, setStudioQuestions] = useState<ItemBankQuestion[]>(
     () => AURA_SCIENCE_BUNDLE.item_bank_schema.items
   );
@@ -230,7 +219,6 @@ export const App: React.FC = () => {
     }, 2600);
   }, []);
 
-  // Sync URL query parameters (?view=...&step=...) with browser history
   const syncUrlHistory = useCallback(
     (tab: MainTab, stepSlug: string, mode: 'push' | 'replace' = 'push') => {
       if (typeof window === 'undefined') return;
@@ -256,12 +244,10 @@ export const App: React.FC = () => {
     []
   );
 
-  // Ensure initial URL has ?view=...&step=... on mount
   useEffect(() => {
     syncUrlHistory(activeTab, currentStepSlug, 'replace');
   }, []);
 
-  // Listen to browser Back / Forward (popstate)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPopState = () => {
@@ -288,7 +274,6 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', onPopState);
   }, [studioQuestions]);
 
-  // Persist consumer progress to localStorage whenever state changes
   useEffect(() => {
     const hasAnyAnswer = Object.keys(responses).length > 0;
     const hasAnyMoment =
@@ -302,13 +287,11 @@ export const App: React.FC = () => {
         responses,
         telemetry,
         currentStepSlug,
-        includeSneakyBonus,
         userMaskId,
       });
     }
-  }, [userName, responses, telemetry, currentStepSlug, includeSneakyBonus, userMaskId]);
+  }, [userName, responses, telemetry, currentStepSlug, userMaskId]);
 
-  // Welcome typewriter effect
   useEffect(() => {
     const fullText =
       'A gentle space to reflect on where your focus flows, what restores your energy, and what makes you uniquely you.';
@@ -330,7 +313,6 @@ export const App: React.FC = () => {
     setActiveFlowId(overview.active_flow_id);
   }, []);
 
-  // Effective responses: ONLY use SAMPLE_DEMO_RESPONSES as fallback for Portrait/Together preview when user hasn't answered any questions yet
   const getEffectiveResponsesForScoring = useCallback(
     (respObj: Record<number, number>) => {
       return Object.keys(respObj).length > 0 ? respObj : SAMPLE_DEMO_RESPONSES;
@@ -403,7 +385,6 @@ export const App: React.FC = () => {
     ]
   );
 
-  // Initial bootstrap
   useEffect(() => {
     (async () => {
       await AuraAPI.fetchScienceModels();
@@ -413,7 +394,6 @@ export const App: React.FC = () => {
     })();
   }, []);
 
-  // Re-compute portrait whenever telemetry changes
   useEffect(() => {
     refreshPortrait(responses, userMaskId, telemetry);
   }, [telemetry]);
@@ -460,7 +440,6 @@ export const App: React.FC = () => {
         setUserName(welcomeInputName.trim());
       }
       if (targetTab === 'test') {
-        // CRITICAL: Ensure completely empty responses `{}` on fresh reflection start
         clearSavedProgress();
         setResponses({});
         setCurrentQIdx(0);
@@ -541,7 +520,6 @@ export const App: React.FC = () => {
     showToast(`Copied Quiet Portrait link for ${userName}!`);
   }, [userRawScores, decomposition, userMaskId, userName, showToast]);
 
-  // Attach global window helpers for full backwards compatibility with Playwright scripts
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
     w.switchTab = (tabName: MainTab) => handleSwitchTab(tabName);
@@ -581,7 +559,6 @@ export const App: React.FC = () => {
 
   return (
     <>
-      {/* Toast Banner */}
       <div
         id="toast-banner"
         className={`toast-banner ${toastMsg ? 'visible' : ''}`}
@@ -589,35 +566,31 @@ export const App: React.FC = () => {
         {toastMsg || 'Copied link to clipboard!'}
       </div>
 
-      {/* Ambient Sanctuary Background */}
       <div className="ambient-bg">
         <div className="orb orb-1" />
         <div className="orb orb-2" />
       </div>
 
-      {/* Welcome Modal */}
+      {/* Weightless Open Welcome Screen */}
       {welcomeVisible && (
         <div id="welcome-overlay" className="overlay-screen">
-          <div className="glass-card overlay-card">
+          <div className="overlay-card">
             <div
               id="welcome-orbital"
               style={{
-                width: '86px',
-                height: '86px',
-                margin: '0 auto 12px',
+                width: '76px',
+                height: '76px',
+                margin: '0 auto 16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <OrbitalSvg size={86} uid="welcome" />
-            </div>
-            <div className="soft-pill" style={{ marginBottom: '14px' }}>
-              ✦ Quiet Mind Portrait
+              <OrbitalSvg size={76} uid="welcome" />
             </div>
             <h1
               className="serif"
-              style={{ fontSize: '34px', lineHeight: 1.14, marginBottom: '10px' }}
+              style={{ fontSize: '34px', lineHeight: 1.15, marginBottom: '10px' }}
             >
               Take a quiet breath.
               <br />
@@ -631,29 +604,21 @@ export const App: React.FC = () => {
                 fontSize: '14px',
                 color: 'var(--text-muted)',
                 minHeight: '42px',
-                marginBottom: '18px',
+                marginBottom: '22px',
               }}
             >
               {welcomeTwText}
             </p>
 
             <div className="name-input-wrap">
-              <span
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--text-dim)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                First name (optional)
-              </span>
               <input
                 id="welcome-name-input"
                 type="text"
-                placeholder="e.g., Alex"
+                placeholder="Your first name (optional)"
                 maxLength={24}
                 value={welcomeInputName}
                 onChange={(e) => setWelcomeInputName(e.target.value)}
+                style={{ textAlign: 'center' }}
               />
             </div>
 
@@ -661,15 +626,15 @@ export const App: React.FC = () => {
               type="button"
               onClick={() => handleDismissWelcome('test')}
               className="btn-primary"
-              style={{ marginBottom: '9px' }}
+              style={{ marginBottom: '12px' }}
             >
-              Begin Quiet Reflection
+              Begin Quiet Reflection →
             </button>
             <button
               type="button"
               onClick={() => handleDismissWelcome('blueprint')}
-              className="btn-ghost"
-              style={{ width: '100%' }}
+              className="aura-inline-text-btn"
+              style={{ width: '100%', textAlign: 'center', padding: '6px' }}
             >
               Explore Sample Portrait →
             </button>
@@ -687,9 +652,9 @@ export const App: React.FC = () => {
           <div style={{ textAlign: 'center', maxWidth: '340px' }}>
             <div
               id="loader-orbital"
-              style={{ width: '82px', height: '82px', margin: '0 auto 14px' }}
+              style={{ width: '76px', height: '76px', margin: '0 auto 14px' }}
             >
-              <OrbitalSvg size={82} uid="loader" />
+              <OrbitalSvg size={76} uid="loader" />
             </div>
             <h2 className="serif" style={{ fontSize: '26px', marginBottom: '6px' }}>
               Weaving Your Quiet Portrait...
@@ -705,23 +670,52 @@ export const App: React.FC = () => {
       )}
 
       {/* Main App Shell */}
-      <div className="app-container">
-        <header className="top-header">
-          <div className="brand-pill">
-            <span className="brand-dot" />
-            <span>Aura</span>
-            <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>
-              · Quiet Mind Portrait
-            </span>
-          </div>
-          <div className="top-header-right">
-            <div id="header-tier-badge" className="tier-badge">
-              Calm Reflection
+      <div className={`app-container ${activeTab === 'test' ? 'is-typeform-mode' : ''}`}>
+        {/* Whisper-thin top navigation ONLY shown on Portrait / Together / Guides */}
+        {activeTab !== 'test' && (
+          <header className="top-header">
+            <div className="brand-pill">
+              <span className="brand-dot" />
+              <span>Aura</span>
             </div>
-          </div>
-        </header>
+            <nav className="top-inline-nav">
+              <button
+                id="nav-test"
+                type="button"
+                onClick={() => handleSwitchTab('test')}
+                className="top-nav-link"
+              >
+                Reflect
+              </button>
+              <button
+                id="nav-blueprint"
+                type="button"
+                onClick={() => handleSwitchTab('blueprint')}
+                className={`top-nav-link ${activeTab === 'blueprint' ? 'active' : ''}`}
+              >
+                Portrait
+              </button>
+              <button
+                id="nav-chemistry"
+                type="button"
+                onClick={() => handleSwitchTab('chemistry')}
+                className={`top-nav-link ${activeTab === 'chemistry' ? 'active' : ''}`}
+              >
+                Together
+              </button>
+              <button
+                id="nav-pro"
+                type="button"
+                onClick={() => handleSwitchTab('pro')}
+                className={`top-nav-link ${activeTab === 'pro' ? 'active' : ''}`}
+              >
+                Guides
+              </button>
+            </nav>
+          </header>
+        )}
 
-        {/* VIEW 1: REFLECT (End-to-End Typeform Flow with Interwoven Mind Moments) */}
+        {/* VIEW 1: REFLECT (Weightless Zero-Scroll Full-Screen Typeform Stage) */}
         {activeTab === 'test' && (
           <QuietReflection
             questions={studioQuestions}
@@ -730,13 +724,10 @@ export const App: React.FC = () => {
             currentQIdx={currentQIdx}
             currentStepSlug={currentStepSlug}
             reflectPart={reflectPart}
-            includeSneakyBonus={includeSneakyBonus}
-            onToggleSneakyBonus={(next) => setIncludeSneakyBonus(next)}
             onSelectAnswer={(qId, val) => handleSelectAnswer(qId, val)}
             onSetCurrentQIdx={(idx) => setCurrentQIdx(idx)}
             onNavigateStepSlug={(slug, push) => handleNavigateStepSlug(slug, push)}
             onSwitchReflectPart={(part) => setReflectPart(part)}
-            onResetProgress={handleResetProgress}
             onFinishToPortrait={(tel) => triggerSynthesisLoader(tel)}
           />
         )}
@@ -804,7 +795,7 @@ export const App: React.FC = () => {
           />
         )}
 
-        {/* VIEW 4: GUIDES (Consumer Deep Portrait Guides & Passes) */}
+        {/* VIEW 4: GUIDES */}
         {activeTab === 'pro' && (
           <MoreAndLabView
             onPreviewFullPortraitGuide={() => {
@@ -816,46 +807,6 @@ export const App: React.FC = () => {
           />
         )}
       </div>
-
-      {/* Bottom Navigation (Reflect · Portrait · Together · Guides) */}
-      <nav className="bottom-nav">
-        <button
-          id="nav-test"
-          type="button"
-          onClick={() => handleSwitchTab('test')}
-          className={`nav-tab ${activeTab === 'test' ? 'active' : ''}`}
-        >
-          <span className="nav-icon">✦</span>
-          <span>Reflect</span>
-        </button>
-        <button
-          id="nav-blueprint"
-          type="button"
-          onClick={() => handleSwitchTab('blueprint')}
-          className={`nav-tab ${activeTab === 'blueprint' ? 'active' : ''}`}
-        >
-          <span className="nav-icon">◎</span>
-          <span>Portrait</span>
-        </button>
-        <button
-          id="nav-chemistry"
-          type="button"
-          onClick={() => handleSwitchTab('chemistry')}
-          className={`nav-tab ${activeTab === 'chemistry' ? 'active' : ''}`}
-        >
-          <span className="nav-icon">∞</span>
-          <span>Together</span>
-        </button>
-        <button
-          id="nav-pro"
-          type="button"
-          onClick={() => handleSwitchTab('pro')}
-          className={`nav-tab ${activeTab === 'pro' ? 'active' : ''}`}
-        >
-          <span className="nav-icon">✧</span>
-          <span>Guides</span>
-        </button>
-      </nav>
     </>
   );
 };
