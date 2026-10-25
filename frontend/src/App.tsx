@@ -1,4 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AURA_PALETTES,
+  AuraWebGLCanvas,
+  applyPaletteCssVariables,
+} from './components/AuraWebGLCanvas';
 import { MoreAndLabView } from './components/MoreAndLabView';
 import {
   AuraMicroGamesBridge,
@@ -14,6 +19,14 @@ import {
 } from './components/QuietReflection';
 import { TogetherView } from './components/TogetherView';
 import {
+  AGE_BAND_OPTIONS,
+  DEFAULT_USER_CONTEXT,
+  LANGUAGE_OPTIONS,
+  LIFE_CONTEXT_OPTIONS,
+  LOCALE_OPTIONS,
+  findQuestionBySlugOrId,
+} from './data/adaptivePool120';
+import {
   AURA_SCIENCE_BUNDLE,
   INITIAL_STUDIO_FLOWS,
   PARTNER_PRESETS,
@@ -21,12 +34,17 @@ import {
 } from './data/scienceBundle';
 import { AuraAPI } from './services/apiClient';
 import {
+  AgeBand,
   ChemistryResult,
   DecompositionResult,
   DomainKey,
   ItemBankQuestion,
+  LifeContext,
+  LocaleSetting,
   StudioFlow,
+  SupportedLanguage,
   TelemetryState,
+  UserContextProfile,
 } from './types/aura';
 
 type MainTab = 'test' | 'blueprint' | 'chemistry' | 'pro';
@@ -36,9 +54,12 @@ const STORAGE_KEY = 'aura_consumer_progress_v1';
 interface PersistedConsumerProgress {
   userName?: string;
   responses?: Record<number, number>;
+  dynamicQuestionIds?: number[];
+  userContext?: UserContextProfile;
   telemetry?: TelemetryState;
   currentStepSlug?: string;
   userMaskId?: string;
+  paletteIndex?: number;
 }
 
 function loadSavedProgress(): PersistedConsumerProgress | null {
@@ -131,6 +152,28 @@ export const App: React.FC = () => {
     }
   }, [savedProgress]);
 
+  const [activePaletteIndex, setActivePaletteIndex] = useState<number>(() => {
+    if (
+      typeof savedProgress?.paletteIndex === 'number' &&
+      savedProgress.paletteIndex >= 0 &&
+      savedProgress.paletteIndex < AURA_PALETTES.length
+    ) {
+      return savedProgress.paletteIndex;
+    }
+    return 0; // Start on Serene Dawn
+  });
+  const [breathingSpeed, setBreathingSpeed] = useState<number>(1.0);
+  const [grainIntensity, setGrainIntensity] = useState<number>(0.35);
+  const [warpComplexity, setWarpComplexity] = useState<number>(0.55);
+  const [atmosphereOpen, setAtmosphereOpen] = useState<boolean>(false);
+  const [pureCanvasMode, setPureCanvasMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    applyPaletteCssVariables(
+      AURA_PALETTES[activePaletteIndex] || AURA_PALETTES[0]
+    );
+  }, [activePaletteIndex]);
+
   const [welcomeVisible, setWelcomeVisible] = useState<boolean>(() => {
     if (
       initialUrlState.initialTab !== 'test' ||
@@ -165,6 +208,29 @@ export const App: React.FC = () => {
     }
     return {};
   });
+  const [dynamicQuestionIds, setDynamicQuestionIds] = useState<number[]>(() => {
+    const baseIds =
+      Array.isArray(savedProgress?.dynamicQuestionIds) &&
+      savedProgress.dynamicQuestionIds.length > 0
+        ? [...savedProgress.dynamicQuestionIds]
+        : [1];
+    const slugToMatch =
+      (initialUrlState.hasExplicitRoute && initialUrlState.initialStepSlug) ||
+      savedProgress?.currentStepSlug ||
+      QUESTION_SLUG_MAP[1];
+    const matchedQ = findQuestionBySlugOrId(
+      AURA_SCIENCE_BUNDLE.item_bank_schema.items,
+      slugToMatch
+    );
+    if (matchedQ && !baseIds.includes(matchedQ.id)) {
+      baseIds.push(matchedQ.id);
+    }
+    return baseIds;
+  });
+  const [userContext, setUserContext] = useState<UserContextProfile>(() => ({
+    ...DEFAULT_USER_CONTEXT,
+    ...(savedProgress?.userContext || {}),
+  }));
   const [currentQIdx, setCurrentQIdx] = useState<number>(() => {
     const slugToMatch =
       (initialUrlState.hasExplicitRoute && initialUrlState.initialStepSlug) ||
@@ -172,7 +238,7 @@ export const App: React.FC = () => {
       QUESTION_SLUG_MAP[1];
     const entry = Object.entries(QUESTION_SLUG_MAP).find(([, s]) => s === slugToMatch);
     if (entry) {
-      return Math.max(0, Number(entry[0]) - 1);
+      return Math.max(0, Math.min(14, Number(entry[0]) - 1));
     }
     return 0;
   });
@@ -263,9 +329,11 @@ export const App: React.FC = () => {
           nextStep === MIND_MOMENT_SLUGS[2];
         setReflectPart(isMoment ? 'moments' : 'questions');
         if (!isMoment) {
-          const foundQ = studioQuestions.find((q) => getQuestionSlug(q) === nextStep);
+          const foundQ = findQuestionBySlugOrId(studioQuestions, nextStep);
           if (foundQ) {
-            setCurrentQIdx(Math.max(0, foundQ.id - 1));
+            setDynamicQuestionIds((prev) =>
+              prev.includes(foundQ.id) ? prev : [...prev, foundQ.id]
+            );
           }
         }
       }
@@ -281,16 +349,35 @@ export const App: React.FC = () => {
       telemetry.constellation_memory.completed ||
       telemetry.minds_eye.completed;
 
-    if (hasAnyAnswer || hasAnyMoment || currentStepSlug !== QUESTION_SLUG_MAP[1]) {
+    if (
+      hasAnyAnswer ||
+      hasAnyMoment ||
+      currentStepSlug !== QUESTION_SLUG_MAP[1] ||
+      dynamicQuestionIds.length > 1 ||
+      userContext.language !== 'en' ||
+      userContext.lifeContext !== 'knowledge_remote'
+    ) {
       saveProgressToStorage({
         userName,
         responses,
+        dynamicQuestionIds,
+        userContext,
         telemetry,
         currentStepSlug,
         userMaskId,
+        paletteIndex: activePaletteIndex,
       });
     }
-  }, [userName, responses, telemetry, currentStepSlug, userMaskId]);
+  }, [
+    userName,
+    responses,
+    dynamicQuestionIds,
+    userContext,
+    telemetry,
+    currentStepSlug,
+    userMaskId,
+    activePaletteIndex,
+  ]);
 
   useEffect(() => {
     const fullText =
@@ -425,6 +512,7 @@ export const App: React.FC = () => {
   const handleResetProgress = useCallback(() => {
     clearSavedProgress();
     setResponses({});
+    setDynamicQuestionIds([1]);
     setCurrentQIdx(0);
     setReflectPart('questions');
     const firstSlug = QUESTION_SLUG_MAP[1];
@@ -442,6 +530,7 @@ export const App: React.FC = () => {
       if (targetTab === 'test') {
         clearSavedProgress();
         setResponses({});
+        setDynamicQuestionIds([1]);
         setCurrentQIdx(0);
         const firstSlug = QUESTION_SLUG_MAP[1];
         setCurrentStepSlug(firstSlug);
@@ -537,6 +626,11 @@ export const App: React.FC = () => {
     w.unlockProDemo = (msg?: string) => handleUnlockPro(msg);
     w.copyShareLink = () => handleSharePortrait();
     w.resetReflection = () => handleResetProgress();
+    w.triggerPaletteTransition = (idx: number) => {
+      if (idx >= 0 && idx < AURA_PALETTES.length) {
+        setActivePaletteIndex(idx);
+      }
+    };
   }, [
     currentQIdx,
     handleDismissWelcome,
@@ -557,6 +651,9 @@ export const App: React.FC = () => {
     );
   }, [studioFlows, activeFlowId]);
 
+  const activePalette =
+    AURA_PALETTES[activePaletteIndex] || AURA_PALETTES[0];
+
   return (
     <>
       <div
@@ -566,13 +663,302 @@ export const App: React.FC = () => {
         {toastMsg || 'Copied link to clipboard!'}
       </div>
 
-      <div className="ambient-bg">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-      </div>
+      {/* Fullscreen WebGL Mesh Aurora & Analog Film Grain Canvas */}
+      <AuraWebGLCanvas
+        paletteIndex={activePaletteIndex}
+        breathingSpeed={breathingSpeed}
+        grainIntensity={grainIntensity}
+        warpComplexity={warpComplexity}
+      />
+
+      {/* Restore UI Floating Pill when in Pure Canvas mode */}
+      {pureCanvasMode && (
+        <button
+          id="restore-ui-btn"
+          type="button"
+          onClick={() => setPureCanvasMode(false)}
+          className="pure-canvas-restore-pill"
+        >
+          Restore UI · {activePalette.name}
+        </button>
+      )}
+
+      {/* Floating Atmosphere Controls Popover (Never causes page scrolling) */}
+      {atmosphereOpen && !pureCanvasMode && (
+        <div id="atmosphere-popover" className="atmosphere-popover-backdrop" onClick={() => setAtmosphereOpen(false)}>
+          <div className="atmosphere-popover-card glass-panel" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-secondary)' }}>
+                Aura State Palettes
+              </span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAtmosphereOpen(false);
+                    setPureCanvasMode(true);
+                  }}
+                  className="aura-inline-text-btn"
+                  style={{ fontSize: '11px', fontWeight: 600 }}
+                >
+                  Pure Canvas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAtmosphereOpen(false)}
+                  className="aura-inline-text-btn"
+                  style={{ fontSize: '13px', fontWeight: 700 }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div id="palette-buttons" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+              {AURA_PALETTES.map((p, idx) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  data-palette-idx={idx}
+                  onClick={() => setActivePaletteIndex(idx)}
+                  className={`palette-btn glass-option ${idx === activePaletteIndex ? 'active' : ''}`}
+                  style={{
+                    padding: '6px 11px',
+                    borderRadius: '999px',
+                    fontSize: '11.5px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: idx === activePaletteIndex ? 700 : 500,
+                    borderColor: idx === activePaletteIndex ? 'var(--text-primary)' : 'var(--glass-border)',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '9px',
+                      height: '9px',
+                      borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${p.colors[1]}, ${p.colors[2]})`,
+                    }}
+                  />
+                  <span>{p.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10.5px', marginBottom: '4px' }}>
+                  <span>Speed</span>
+                  <span className="mono">{breathingSpeed.toFixed(1)}x</span>
+                </div>
+                <input
+                  id="speed-slider"
+                  type="range"
+                  min={0.1}
+                  max={3.0}
+                  step={0.1}
+                  value={breathingSpeed}
+                  onChange={(e) => setBreathingSpeed(parseFloat(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10.5px', marginBottom: '4px' }}>
+                  <span>Grain</span>
+                  <span className="mono">{Math.round(grainIntensity * 100)}%</span>
+                </div>
+                <input
+                  id="grain-slider"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round(grainIntensity * 100)}
+                  onChange={(e) => setGrainIntensity(parseInt(e.target.value, 10) / 100)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10.5px', marginBottom: '4px' }}>
+                  <span>Flow</span>
+                  <span className="mono">{Math.round(warpComplexity * 100)}%</span>
+                </div>
+                <input
+                  id="warp-slider"
+                  type="range"
+                  min={10}
+                  max={100}
+                  step={1}
+                  value={Math.round(warpComplexity * 100)}
+                  onChange={(e) => setWarpComplexity(parseInt(e.target.value, 10) / 100)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* LLM Contextual Morphing & DIF De-Biasing Lens */}
+            <div
+              id="context-lens-controls"
+              style={{
+                marginTop: '14px',
+                paddingTop: '12px',
+                borderTop: '1px solid var(--glass-border)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '8px',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  🌍 Life Context &amp; Language Lens (DIF De-Biased)
+                </span>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {LANGUAGE_OPTIONS.map((lang) => (
+                    <button
+                      key={lang.id}
+                      type="button"
+                      onClick={() =>
+                        setUserContext((prev) => ({
+                          ...prev,
+                          language: lang.id as SupportedLanguage,
+                        }))
+                      }
+                      className={`glass-option ${
+                        userContext.language === lang.id ? 'selected' : ''
+                      }`}
+                      style={{
+                        padding: '2px 7px',
+                        borderRadius: '999px',
+                        fontSize: '10px',
+                        fontWeight: userContext.language === lang.id ? 700 : 500,
+                      }}
+                    >
+                      {lang.flag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '8px',
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '10px',
+                      color: 'var(--text-dim)',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    Age Season
+                  </label>
+                  <select
+                    id="context-age-select"
+                    value={userContext.ageBand}
+                    onChange={(e) =>
+                      setUserContext((prev) => ({
+                        ...prev,
+                        ageBand: e.target.value as AgeBand,
+                      }))
+                    }
+                    className="clean-select"
+                    style={{ fontSize: '11px', padding: '4px 2px' }}
+                  >
+                    {AGE_BAND_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.short}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '10px',
+                      color: 'var(--text-dim)',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    Everyday World
+                  </label>
+                  <select
+                    id="context-life-select"
+                    value={userContext.lifeContext}
+                    onChange={(e) =>
+                      setUserContext((prev) => ({
+                        ...prev,
+                        lifeContext: e.target.value as LifeContext,
+                      }))
+                    }
+                    className="clean-select"
+                    style={{ fontSize: '11px', padding: '4px 2px' }}
+                  >
+                    {LIFE_CONTEXT_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.short}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '10px',
+                      color: 'var(--text-dim)',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    Setting
+                  </label>
+                  <select
+                    id="context-locale-select"
+                    value={userContext.locale}
+                    onChange={(e) =>
+                      setUserContext((prev) => ({
+                        ...prev,
+                        locale: e.target.value as LocaleSetting,
+                      }))
+                    }
+                    className="clean-select"
+                    style={{ fontSize: '11px', padding: '4px 2px' }}
+                  >
+                    {LOCALE_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.short}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Weightless Open Welcome Screen */}
-      {welcomeVisible && (
+      {welcomeVisible && !pureCanvasMode && (
         <div id="welcome-overlay" className="overlay-screen">
           <div className="overlay-card">
             <div
@@ -590,11 +976,11 @@ export const App: React.FC = () => {
             </div>
             <h1
               className="serif"
-              style={{ fontSize: '34px', lineHeight: 1.15, marginBottom: '10px' }}
+              style={{ fontSize: '36px', lineHeight: 1.15, marginBottom: '10px', color: 'var(--text-primary)' }}
             >
               Take a quiet breath.
               <br />
-              <span style={{ color: '#c4b5fd', fontStyle: 'italic' }}>
+              <span style={{ color: 'var(--accent)', fontStyle: 'italic' }}>
                 Meet how your mind naturally moves.
               </span>
             </h1>
@@ -602,7 +988,7 @@ export const App: React.FC = () => {
               id="welcome-tw-text"
               style={{
                 fontSize: '14px',
-                color: 'var(--text-muted)',
+                color: 'var(--text-secondary)',
                 minHeight: '42px',
                 marginBottom: '22px',
               }}
@@ -656,12 +1042,12 @@ export const App: React.FC = () => {
             >
               <OrbitalSvg size={76} uid="loader" />
             </div>
-            <h2 className="serif" style={{ fontSize: '26px', marginBottom: '6px' }}>
+            <h2 className="serif" style={{ fontSize: '28px', marginBottom: '6px', color: 'var(--text-primary)' }}>
               Weaving Your Quiet Portrait...
             </h2>
             <p
               id="loader-tw-msg"
-              style={{ fontSize: '13px', color: '#c4b5fd', minHeight: '36px' }}
+              style={{ fontSize: '13px', color: 'var(--accent)', minHeight: '36px' }}
             >
               {loaderMsg}
             </p>
@@ -670,13 +1056,37 @@ export const App: React.FC = () => {
       )}
 
       {/* Main App Shell */}
-      <div className={`app-container ${activeTab === 'test' ? 'is-typeform-mode' : ''}`}>
+      <div
+        className={`app-container ${activeTab === 'test' ? 'is-typeform-mode' : ''} ${
+          pureCanvasMode ? 'ui-hidden' : ''
+        }`}
+      >
         {/* Whisper-thin top navigation ONLY shown on Portrait / Together / Guides */}
         {activeTab !== 'test' && (
           <header className="top-header">
-            <div className="brand-pill">
-              <span className="brand-dot" />
-              <span>Aura</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div className="brand-pill">
+                <span className="brand-dot" />
+                <span className="serif" style={{ fontSize: '18px', fontWeight: 500 }}>aura</span>
+              </div>
+              <button
+                id="top-mood-pill"
+                type="button"
+                onClick={() => setAtmosphereOpen((prev) => !prev)}
+                className="aura-resonance-micro-pill"
+                style={{ padding: '4px 8px' }}
+                title={`Tune Aura atmosphere (${activePalette.name})`}
+              >
+                <span className="aura-swatch-cluster">
+                  {activePalette.colors.slice(1, 4).map((hex, i) => (
+                    <span
+                      key={i}
+                      className="aura-micro-swatch"
+                      style={{ backgroundColor: hex }}
+                    />
+                  ))}
+                </span>
+              </button>
             </div>
             <nav className="top-inline-nav">
               <button
@@ -721,9 +1131,15 @@ export const App: React.FC = () => {
             questions={studioQuestions}
             activeFlow={activeFlow}
             responses={responses}
+            dynamicQuestionIds={dynamicQuestionIds}
+            onChangeDynamicQuestionIds={setDynamicQuestionIds}
+            userContext={userContext}
             currentQIdx={currentQIdx}
             currentStepSlug={currentStepSlug}
             reflectPart={reflectPart}
+            activePaletteIndex={activePaletteIndex}
+            onSelectPalette={(idx) => setActivePaletteIndex(idx)}
+            onToggleAtmospherePopover={() => setAtmosphereOpen((prev) => !prev)}
             onSelectAnswer={(qId, val) => handleSelectAnswer(qId, val)}
             onSetCurrentQIdx={(idx) => setCurrentQIdx(idx)}
             onNavigateStepSlug={(slug, push) => handleNavigateStepSlug(slug, push)}

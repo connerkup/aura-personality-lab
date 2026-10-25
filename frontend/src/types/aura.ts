@@ -49,8 +49,46 @@ export interface TelemetryProfile {
   pattern_synthesis_boost_pct: number;
 }
 
+export type NodeTier = 'anchor' | 'branch_probe' | 'deep_resolution' | 'everyday_moment';
+
+export interface ParentTriggerRule {
+  if_question_id: number;
+  operator: '>=' | '<=' | '==' | '>' | '<';
+  threshold: number;
+  rationale?: string;
+}
+
+export type AgeBand = '18_24' | '25_39' | '40_59' | '60_plus';
+export type LifeContext =
+  | 'working_practical'
+  | 'student_creative'
+  | 'knowledge_remote'
+  | 'caregiver_family';
+export type LocaleSetting = 'urban' | 'suburban' | 'rural';
+export type SupportedLanguage = 'en' | 'es' | 'fr' | 'pt';
+
+export interface UserContextProfile {
+  ageBand: AgeBand;
+  lifeContext: LifeContext;
+  locale: LocaleSetting;
+  language: SupportedLanguage;
+  customBio?: string;
+}
+
+export interface MorphedQuestionResult {
+  morphedText: string;
+  morphedTheme: string;
+  difNote: string;
+  likertLabels: { val: number; label: string }[];
+  isMorphed: boolean;
+  contextBadge: string;
+}
+
 export interface ItemBankQuestion {
   id: number;
+  slug?: string;
+  node_tier?: NodeTier | string;
+  parent_trigger?: ParentTriggerRule | null;
   domain: DomainKey;
   aspect: string;
   layer: string;
@@ -65,6 +103,40 @@ export interface ItemBankQuestion {
   text: string;
   calm_theme: string;
   scientific_hypothesis?: string;
+}
+
+export interface DomainPosterior {
+  domain: DomainKey;
+  theta: number;
+  percentile: number;
+  se: number;
+  theta_se: number;
+  answered_count: number;
+  fisher_info_sum: number;
+}
+
+export interface AdaptiveCandidateScore {
+  item: ItemBankQuestion;
+  fisher_info: number;
+  uncertainty_weight: number;
+  branch_bonus: number;
+  stage_bonus: number;
+  telemetry_bonus: number;
+  total_utility: number;
+  branch_triggered: boolean;
+  trigger_description: string | null;
+  reason_summary: string;
+}
+
+export interface AdaptiveSelectionResult {
+  nextItem: ItemBankQuestion;
+  selectionReason: string;
+  poolSize: number;
+  remainingCount: number;
+  stepNumber: number;
+  stageTier: NodeTier;
+  domainPosteriors: Record<DomainKey, DomainPosterior>;
+  topCandidates: AdaptiveCandidateScore[];
 }
 
 export interface NeuroMask {

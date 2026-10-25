@@ -7,33 +7,18 @@ import {
   ShadowCalibrationRow,
   StudioFlow,
 } from '../types/aura';
+import {
+  ADAPTIVE_POOL_120,
+  EXACT_15_SLUGS,
+  getAdaptiveQuestionSlug,
+} from './adaptivePool120';
 
 export const QUESTION_SLUG_MAP: Record<number, string> = {
-  1: 'q-01-deeper-patterns',
-  2: 'q-02-what-you-notice',
-  3: 'q-03-where-focus-flows',
-  4: 'q-04-structure-and-rhythm',
-  5: 'q-05-shared-spaces',
-  6: 'q-06-shared-momentum',
-  7: 'q-07-connection-and-care',
-  8: 'q-08-clarity-with-others',
-  9: 'q-09-looking-ahead',
-  10: 'q-10-steadiness-in-change',
-  11: 'q-11-quiet-effort',
-  12: 'q-12-your-current-season',
-  13: 'q-13-everyday-digital-habits',
-  14: 'q-14-micro-moments-of-warmth',
-  15: 'q-15-energy-and-transitions',
+  ...EXACT_15_SLUGS,
 };
 
 export function getQuestionSlug(q: Pick<ItemBankQuestion, 'id' | 'calm_theme' | 'slug'>): string {
-  if (q.slug) return q.slug;
-  if (QUESTION_SLUG_MAP[q.id]) return QUESTION_SLUG_MAP[q.id];
-  const themeSlug = (q.calm_theme || 'everyday-habit')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  return `q-${String(q.id).padStart(2, '0')}-${themeSlug}`;
+  return getAdaptiveQuestionSlug(q);
 }
 
 export const MIND_MOMENT_INTERLUDES: MindMomentInterlude[] = [
@@ -1202,10 +1187,10 @@ export const AURA_SCIENCE_BUNDLE = {
     masks: INITIAL_MASKS,
   },
   item_bank_schema: {
-    schema_version: '4.0.0',
+    schema_version: '5.0.0',
     description:
-      '15-Item Epistemic Blind-Inference & Shadow Calibration Bank (12 Calibrated Anchors + 3 Disarming Sneaky Behavioral Micro-Questions).',
-    items: INITIAL_ITEMS,
+      '120-Item Dynamic Question Tree & CAT Pool (12 Calibrated Anchors, 35 Branch Probes, 50 Deep-Resolution 2PL IRT Items, 23 Everyday Moment Sneaky Habit Probes).',
+    items: ADAPTIVE_POOL_120,
   },
   papers_corpus: PAPERS_CORPUS,
   shadow_calibration_matrix: INITIAL_SHADOW_CALIBRATION_MATRIX,

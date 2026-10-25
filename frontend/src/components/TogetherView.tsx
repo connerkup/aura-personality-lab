@@ -61,6 +61,10 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
     const keys: DomainKey[] = ['O', 'C', 'E', 'A', 'N'];
     const labels = ['Curiosity', 'Focus', 'Social', 'Warmth', 'Sensitivity'];
 
+    const rootStyle = getComputedStyle(document.documentElement);
+    const primaryTextColor = rootStyle.getPropertyValue('--text-primary').trim() || '#232533';
+    const borderStroke = rootStyle.getPropertyValue('--glass-border').trim() || 'rgba(120,120,140,0.22)';
+
     for (let ring = 1; ring <= 4; ring++) {
       const r = (R * ring) / 4;
       ctx.beginPath();
@@ -72,7 +76,7 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
         else ctx.lineTo(x, y);
       }
       ctx.closePath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+      ctx.strokeStyle = borderStroke;
       ctx.stroke();
     }
 
@@ -94,11 +98,11 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
       ctx.stroke();
     };
 
-    drawPoly(scoresB, 'rgba(56, 189, 248, 0.18)', '#38bdf8');
-    drawPoly(scoresA, 'rgba(244, 114, 182, 0.22)', '#f472b6');
+    drawPoly(scoresB, 'rgba(14, 165, 233, 0.18)', '#0ea5e9');
+    drawPoly(scoresA, 'rgba(236, 72, 153, 0.22)', '#ec4899');
 
     ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = primaryTextColor;
     ctx.textAlign = 'center';
     for (let i = 0; i < 5; i++) {
       const ang = (Math.PI * 2 * i) / 5 - Math.PI / 2;
@@ -186,19 +190,19 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
         >
           <div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Curiosity</div>
-            <div id="chem-sub-prior" style={{ fontSize: '15px', fontWeight: 700, color: '#c4b5fd' }}>
+            <div id="chem-sub-prior" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--accent)' }}>
               {chemistry ? `${chemistry.sub_metrics.cortical_prior_sync}%` : '92%'}
             </div>
           </div>
           <div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Safety</div>
-            <div id="chem-sub-safety" style={{ fontSize: '15px', fontWeight: 700, color: '#f472b6' }}>
+            <div id="chem-sub-safety" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--rose)' }}>
               {chemistry ? `${chemistry.sub_metrics.allostatic_safety}%` : '86%'}
             </div>
           </div>
           <div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Everyday Flow</div>
-            <div id="chem-sub-exec" style={{ fontSize: '15px', fontWeight: 700, color: '#38bdf8' }}>
+            <div id="chem-sub-exec" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--sky)' }}>
               {chemistry ? `${chemistry.sub_metrics.deconfounded_execution_bridge}%` : '85%'}
             </div>
           </div>
@@ -352,7 +356,7 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
             type="button"
             onClick={() => setStep(1)}
             className="aura-inline-text-btn"
-            style={{ color: '#c4b5fd' }}
+            style={{ color: 'var(--accent)', fontWeight: 600 }}
           >
             Tune Rhythms →
           </button>
@@ -361,7 +365,7 @@ export const TogetherView: React.FC<TogetherViewProps> = ({
             type="button"
             onClick={() => setStep(0)}
             className="aura-inline-text-btn"
-            style={{ color: '#34d399' }}
+            style={{ color: 'var(--emerald)', fontWeight: 600 }}
           >
             View Harmony →
           </button>

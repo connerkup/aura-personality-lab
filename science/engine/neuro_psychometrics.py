@@ -468,43 +468,421 @@ class NeuroPsychometricEngine:
             "shadow_item_diagnostics": shadow_item_diagnostics,
         }
 
-    def select_next_adaptive_item(
-        self, answered_ids: List[int], current_scores: Optional[Dict[str, float]] = None
+    def _evaluate_parent_trigger(
+        self,
+        parent_trigger: Optional[Dict[str, Any]],
+        responses: Optional[Dict[str, Any]],
+        domain_pcts: Dict[str, float],
+        domain_thetas: Dict[str, float],
+        domain_counts: Dict[str, int],
+        norm_tel: Dict[str, Any],
+        total_answered: int,
     ) -> Dict[str, Any]:
-        answered_set = set(int(x) for x in answered_ids)
-        remaining = [
-            it for it in self.item_bank_schema["items"] if int(it["id"]) not in answered_set
-        ]
-        if not remaining:
-            return {"completed": True, "next_item": None, "remaining_count": 0}
+        """
+        Evaluates whether a question's conditional `parent_trigger` is satisfied by:
+          - `question_threshold` (e.g. Q3 >= 4)
+          - `domain_divergence` (e.g. High O vs Low C, or High O + High N)
+          - `telemetry` (e.g. Still Water phasic_spark, Night Sky holistic_constellation, Mind's Eye aphantasia_concept)
+          - `irt_information_match` (latent theta_d within 0.55 of item difficulty b_i)
+        """
+        if not parent_trigger or not isinstance(parent_trigger, dict):
+            return {"triggered": False, "bonus": 0.0, "reason": ""}
 
+        ttype = str(parent_trigger.get("type", ""))
+        label = str(parent_trigger.get("label", "Conditional branch rule"))
+
+        if ttype == "question_threshold":
+            qid = int(parent_trigger.get("question_id", 0))
+            if not responses:
+                return {"triggered": False, "bonus": 0.0, "reason": ""}
+            raw_ans = responses.get(str(qid), responses.get(qid))
+            if raw_ans is None:
+                return {"triggered": False, "bonus": 0.0, "reason": ""}
+            ans_val = float(raw_ans)
+            op = str(parent_trigger.get("op", ">="))
+            target_val = float(parent_trigger.get("val", 4.0))
+            hit = False
+            if op == ">=" and ans_val >= target_val:
+                hit = True
+            elif op == "<=" and ans_val <= target_val:
+                hit = True
+            elif op == "==" and abs(ans_val - target_val) < 1e-6:
+                hit = True
+            elif op == ">" and ans_val > target_val:
+                hit = True
+            elif op == "<" and ans_val < target_val:
+                hit = True
+            if hit:
+                return {
+                    "triggered": True,
+                    "bonus": 4.25,
+                    "reason": f"Branch triggered by {label} (user answered {int(round(ans_val))}/5 on Q{qid})",
+                }
+            return {"triggered": False, "bonus": 0.0, "reason": ""}
+
+        if ttype == "domain_divergence":
+            if total_answered < 2:
+                return {"triggered": False, "bonus": 0.0, "reason": ""}
+            high_d = str(parent_trigger.get("high_domain", "O"))
+            if "low_domain" in parent_trigger:
+                low_d = str(parent_trigger.get("low_domain", "C"))
+                min_gap = float(parent_trigger.get("min_gap", 12.0))
+                gap = float(domain_pcts.get(high_d, 50.0)) - float(domain_pcts.get(low_d, 50.0))
+                if gap >= min_gap:
+                    return {
+                        "triggered": True,
+                        "bonus": 3.85,
+                        "reason": f"Cross-domain divergence triggered: {label} ({high_d}={domain_pcts[high_d]:.0f}% vs {low_d}={domain_pcts[low_d]:.0f}%, Δ={gap:+.0f}%)",
+                    }
+            elif "high_domain_2" in parent_trigger:
+                high_d2 = str(parent_trigger.get("high_domain_2", "N"))
+                min_sum = float(parent_trigger.get("min_sum", 125.0))
+                comb = float(domain_pcts.get(high_d, 50.0)) + float(domain_pcts.get(high_d2, 50.0))
+                if comb >= min_sum:
+                    return {
+                        "triggered": True,
+                        "bonus": 3.75,
+                        "reason": f"Co-elevation branch triggered: {label} ({high_d}+{high_d2}={comb:.0f})",
+                    }
+            return {"triggered": False, "bonus": 0.0, "reason": ""}
+
+        if ttype == "telemetry":
+            if not norm_tel.get("provided"):
+                return {"triggered": False, "bonus": 0.0, "reason": ""}
+            moment = str(parent_trigger.get("moment", ""))
+            cond = str(parent_trigger.get("condition", ""))
+            hit = False
+            detail = ""
+            if moment in ("still_water", "pulse_reaction"):
+                if cond == "phasic_spark" and (norm_tel["rt_cv_pct"] > 22.0 or norm_tel["false_starts"] >= 2):
+                    hit = True
+                    detail = f"RT CV={norm_tel['rt_cv_pct']:.1f}%, false_starts={norm_tel['false_starts']}"
+                elif cond == "deliberate_steady" and (norm_tel["median_rt_ms"] >= 325.0 and norm_tel["rt_cv_pct"] <= 20.0):
+                    hit = True
+                    detail = f"median RT={norm_tel['median_rt_ms']:.0f}ms, CV={norm_tel['rt_cv_pct']:.1f}%"
+            elif moment in ("night_sky", "constellation_memory"):
+                if cond == "holistic_constellation" and (norm_tel["memory_accuracy_pct"] >= 80.0 and norm_tel["mean_chunk_ms"] <= 430.0):
+                    hit = True
+                    detail = f"accuracy={norm_tel['memory_accuracy_pct']:.0f}%, chunk={norm_tel['mean_chunk_ms']:.0f}ms"
+            elif moment == "minds_eye":
+                if cond == "aphantasia_concept" and (norm_tel["imagery_vividness"] <= 25.0 or norm_tel["inner_modality"] == "wordless_concept"):
+                    hit = True
+                    detail = f"vividness={norm_tel['imagery_vividness']:.0f}, modality={norm_tel['inner_modality']}"
+                elif cond == "hyperphantasia_cinema" and norm_tel["imagery_vividness"] >= 80.0:
+                    hit = True
+                    detail = f"vividness={norm_tel['imagery_vividness']:.0f}"
+            if hit:
+                return {
+                    "triggered": True,
+                    "bonus": 4.10,
+                    "reason": f"Mind Moment telemetry trigger: {label} ({detail})",
+                }
+            return {"triggered": False, "bonus": 0.0, "reason": ""}
+
+        if ttype == "irt_information_match":
+            target_dom = str(parent_trigger.get("target_domain", "O"))
+            if domain_counts.get(target_dom, 0) < 1:
+                return {"triggered": False, "bonus": 0.0, "reason": ""}
+            target_theta = float(parent_trigger.get("target_theta", 0.0))
+            curr_theta = float(domain_thetas.get(target_dom, 0.0))
+            dist = abs(curr_theta - target_theta)
+            if dist <= 0.55:
+                match_bonus = round(2.25 * (1.0 - dist / 0.75), 3)
+                return {
+                    "triggered": True,
+                    "bonus": match_bonus,
+                    "reason": f"Latent trait θ_{target_dom}={curr_theta:+.2f} matches item difficulty threshold b={target_theta:+.2f}",
+                }
+            return {"triggered": False, "bonus": 0.0, "reason": ""}
+
+        return {"triggered": False, "bonus": 0.0, "reason": ""}
+
+    def select_next_adaptive_item(
+        self,
+        answered_ids: List[int],
+        current_scores: Optional[Dict[str, float]] = None,
+        responses: Optional[Dict[str, Any]] = None,
+        telemetry: Optional[Dict[str, Any]] = None,
+        context_profile: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Bayesian 2PL IRT Computerized Adaptive Testing (CAT) + Conditional Question Tree Selector
+        across the 120-item pool.
+
+        Combines:
+          1. 2PL Fisher Information at current latent trait estimate theta_d:
+             I_i(theta_d) = a_i^2 * p_i(theta_d) * (1 - p_i(theta_d))
+          2. Domain & DeYoung 10-Aspect Posterior Uncertainty Weighting (prioritizing high SE_d
+             and under-sampled aspects)
+          3. Conditional Tree Branching (`question_threshold`, `domain_divergence`, `telemetry`,
+             and `irt_information_match` triggers)
+          4. Stage-Aware Tier Weighting:
+             - Steps 1–5 (`len(answered_ids) < 5`): Symmetry-breaking `anchor` items across all 5 domains
+             - Steps 6–11 (`5 <= len(answered_ids) < 11`): Triggered `branch_probe` & `deep_resolution` items
+             - Step 12+ (`len(answered_ids) >= 11`): Disarming `everyday_moment` & high-uncertainty `deep_resolution` items
+        """
+        clean_responses: Dict[str, int] = {}
+        if responses and isinstance(responses, dict):
+            for k, v in responses.items():
+                if v is not None:
+                    try:
+                        clean_responses[str(int(k))] = int(round(float(v)))
+                    except Exception:
+                        pass
+
+        answered_set = set(int(x) for x in (answered_ids or []))
+        for k in clean_responses.keys():
+            answered_set.add(int(k))
+
+        all_items = self.item_bank_schema.get("items", [])
+        pool_size = len(all_items)
+        remaining = [it for it in all_items if int(it["id"]) not in answered_set]
+
+        norm_tel = self._normalize_telemetry(telemetry)
         domain_counts = {d: 0 for d in DOMAIN_KEYS}
+        aspect_counts: Dict[str, int] = {}
         for aid in answered_set:
             if aid in self.items_by_id:
-                domain_counts[self.items_by_id[aid]["domain"]] += 1
+                it_ans = self.items_by_id[aid]
+                dom = it_ans["domain"]
+                domain_counts[dom] = domain_counts.get(dom, 0) + 1
+                asp = it_ans.get("deyoung_aspect") or it_ans.get("aspect", "")
+                aspect_counts[asp] = aspect_counts.get(asp, 0) + 1
 
-        best_item = None
-        best_utility = -1e9
+        # Compute live Bayesian domain posteriors (theta in [-2.2, +2.2], percentile in [5, 95], SE in [0.18, 1.0])
+        irt_live = self.score_responses_irt(clean_responses, telemetry=telemetry) if clean_responses else None
+        domain_pcts: Dict[str, float] = {}
+        domain_thetas: Dict[str, float] = {}
+        domain_ses: Dict[str, float] = {}
+        domain_posteriors: Dict[str, Dict[str, Any]] = {}
+
+        for d in DOMAIN_KEYS:
+            if irt_live and domain_counts[d] > 0:
+                pct = float(irt_live["telemetry_deconfounded_scores"].get(d, 50.0))
+                se_pct = float(irt_live["standard_errors"].get(d, 14.0))
+            elif current_scores and d in current_scores and current_scores[d] is not None:
+                pct = float(self._clamp(float(current_scores[d]), 5.0, 95.0))
+                se_pct = max(4.5, 16.0 - domain_counts[d] * 3.0)
+            else:
+                pct = 50.0
+                se_pct = 18.0
+
+            theta = float(np.clip((pct - 50.0) / 22.0, -2.2, 2.2))
+            se_theta = round(float(np.clip(se_pct / 18.0, 0.18, 1.0)), 3)
+            domain_pcts[d] = round(pct, 1)
+            domain_thetas[d] = round(theta, 3)
+            domain_ses[d] = se_theta
+            domain_posteriors[d] = {
+                "theta": round(theta, 3),
+                "percentile": round(pct, 1),
+                "se": se_theta,
+                "se_pct": round(se_pct, 1),
+                "answered_count": domain_counts[d],
+            }
+
+        step_num = len(answered_set) + 1
+        if len(answered_set) < 5:
+            stage_label = "Stage 1: Symmetry-Breaking Domain Anchors (Steps 1–5)"
+        elif len(answered_set) < 11:
+            stage_label = "Stage 2: Conditional Tree Branching & DeYoung Aspect Resolution (Steps 6–11)"
+        else:
+            stage_label = "Stage 3: Everyday Behavioral Micro-Validation & Deep IRT Convergence (Step 12+)"
+
+        if not remaining:
+            return {
+                "completed": True,
+                "next_item": None,
+                "selection_reason": "All active items in the 120-item pool have been answered.",
+                "stage_label": stage_label,
+                "pool_size": pool_size,
+                "remaining_count": 0,
+                "fisher_information": 0.0,
+                "domain_posteriors": domain_posteriors,
+                "top_candidates": [],
+            }
+
+        scored_candidates: List[Dict[str, Any]] = []
+        total_answered = len(answered_set)
+
         for it in remaining:
+            qid = int(it["id"])
             d = it["domain"]
-            theta = 0.0
-            if current_scores and d in current_scores:
-                theta = (float(current_scores[d]) - 50.0) / 25.0
+            node_tier = it.get("node_tier", "anchor" if qid <= 12 else "everyday_moment")
+            deyoung_asp = it.get("deyoung_aspect") or it.get("aspect", "")
+            theta_d = domain_thetas[d]
+            se_d = domain_ses[d]
+
             a = float(it.get("irt_a", 1.5))
             b = float(it.get("irt_b", 0.0))
-            p = 1.0 / (1.0 + math.exp(-a * (theta - b)))
+            p = 1.0 / (1.0 + math.exp(-a * (theta_d - b)))
             fisher_info = (a ** 2) * p * (1.0 - p)
-            coverage_bonus = (2 - domain_counts[d]) * 2.5
-            utility = fisher_info + coverage_bonus
-            if utility > best_utility:
-                best_utility = utility
-                best_item = it
+
+            # Domain & Aspect Uncertainty Weight
+            domain_coverage_bonus = max(0, 2 - domain_counts[d]) * 1.65 + (2.4 if domain_counts[d] == 0 else 0.0)
+            uncertainty_weight = se_d * 1.90
+            aspect_bonus = max(0, 2 - aspect_counts.get(deyoung_asp, 0)) * 0.75
+
+            # Conditional Tree Branch evaluation
+            trig_eval = self._evaluate_parent_trigger(
+                parent_trigger=it.get("parent_trigger"),
+                responses=clean_responses,
+                domain_pcts=domain_pcts,
+                domain_thetas=domain_thetas,
+                domain_counts=domain_counts,
+                norm_tel=norm_tel,
+                total_answered=total_answered,
+            )
+            branch_bonus = float(trig_eval["bonus"])
+            branch_triggered = bool(trig_eval["triggered"])
+            trigger_reason = str(trig_eval["reason"])
+
+            # Stage-Aware Tier Weighting
+            stage_bonus = 0.0
+            if total_answered < 5:
+                if node_tier == "anchor" and qid <= 10:
+                    stage_bonus = 3.80
+                elif node_tier == "anchor":
+                    stage_bonus = 2.10
+                else:
+                    stage_bonus = -1.50
+            elif total_answered < 11:
+                if node_tier == "branch_probe":
+                    stage_bonus = 2.65 if branch_triggered else -1.40
+                elif node_tier == "deep_resolution":
+                    stage_bonus = 2.20
+                elif node_tier == "anchor":
+                    stage_bonus = 1.60
+                elif node_tier == "everyday_moment":
+                    stage_bonus = 1.85 if branch_triggered else 0.45
+            else:
+                if node_tier == "everyday_moment":
+                    stage_bonus = 2.75 + (1.25 if branch_triggered else 0.0)
+                elif node_tier == "deep_resolution":
+                    stage_bonus = 2.45
+                elif node_tier == "branch_probe" and branch_triggered:
+                    stage_bonus = 2.35
+                else:
+                    stage_bonus = 0.50
+
+            utility = fisher_info + domain_coverage_bonus + uncertainty_weight + aspect_bonus + branch_bonus + stage_bonus
+
+            if branch_triggered and trigger_reason:
+                reason_str = (
+                    f"{trigger_reason} | 2PL Fisher I(θ_{d}={theta_d:+.2f})={fisher_info:.2f} "
+                    f"(a={a:.2f}, b={b:+.2f}, tier={node_tier})"
+                )
+            elif total_answered < 5 and node_tier == "anchor":
+                reason_str = (
+                    f"Initial symmetry-breaking anchor for {CALM_DOMAIN_NAMES.get(d, d)} ({d}) "
+                    f"with high prior uncertainty (SE={se_d:.2f}, Fisher I={fisher_info:.2f})"
+                )
+            elif node_tier == "deep_resolution":
+                reason_str = (
+                    f"DeYoung aspect resolution ({deyoung_asp}): item difficulty b={b:+.2f} closely targets "
+                    f"live latent estimate θ_{d}={theta_d:+.2f} (Fisher I={fisher_info:.2f}, SE={se_d:.2f})"
+                )
+            elif node_tier == "everyday_moment":
+                reason_str = (
+                    f"Disarming everyday micro-habit check for {deyoung_asp} ({d}) to cross-validate "
+                    f"self-report against ecological behavior (prior r={float(it.get('empirical_prior_r', 0.0)):+.2f})"
+                )
+            else:
+                reason_str = (
+                    f"Maximizes Bayesian CAT utility ({utility:.2f}) on {CALM_DOMAIN_NAMES.get(d, d)} "
+                    f"(θ_{d}={theta_d:+.2f}, SE={se_d:.2f}, Fisher I={fisher_info:.2f})"
+                )
+
+            scored_candidates.append({
+                "item": it,
+                "utility": round(float(utility), 3),
+                "fisher_info": round(float(fisher_info), 3),
+                "branch_triggered": branch_triggered,
+                "trigger_reason": trigger_reason,
+                "selection_reason": reason_str,
+            })
+
+        scored_candidates.sort(key=lambda x: (x["utility"], x["fisher_info"], -int(x["item"]["id"])), reverse=True)
+        winner = scored_candidates[0]
+        next_item_dict = dict(winner["item"])
+
+        if context_profile and isinstance(context_profile, dict):
+            from science.models.adaptive_item_pool_120 import morph_question_for_context
+            morphed = morph_question_for_context(next_item_dict, context_profile)
+            next_item_dict["contextualized_text"] = morphed["morphed_text"]
+            next_item_dict["morph_diagnostics"] = morphed
+
+        top_candidates = [
+            {
+                "id": int(c["item"]["id"]),
+                "slug": c["item"].get("slug", f"q-{int(c['item']['id']):03d}"),
+                "domain": c["item"]["domain"],
+                "deyoung_aspect": c["item"].get("deyoung_aspect", ""),
+                "aspect": c["item"].get("aspect", ""),
+                "node_tier": c["item"].get("node_tier", "anchor"),
+                "text": c["item"]["text"],
+                "irt_a": float(c["item"].get("irt_a", 1.5)),
+                "irt_b": float(c["item"].get("irt_b", 0.0)),
+                "utility_score": c["utility"],
+                "fisher_info": c["fisher_info"],
+                "branch_triggered": c["branch_triggered"],
+                "trigger_reason": c["trigger_reason"] or c["selection_reason"],
+            }
+            for c in scored_candidates[:6]
+        ]
 
         return {
             "completed": False,
-            "next_item": best_item,
-            "fisher_information": round(float(best_utility), 3),
+            "step_number": step_num,
+            "stage_label": stage_label,
+            "next_item": next_item_dict,
+            "selection_reason": winner["selection_reason"],
+            "fisher_information": winner["fisher_info"],
+            "utility_score": winner["utility"],
+            "pool_size": pool_size,
             "remaining_count": len(remaining),
+            "domain_posteriors": domain_posteriors,
+            "top_candidates": top_candidates,
+        }
+
+    def morph_question_context(
+        self,
+        question_id: int,
+        context_profile: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Applies DIF-Free Contextual & Multilingual Morphing to a question by ID.
+        """
+        from science.models.adaptive_item_pool_120 import morph_question_for_context
+
+        qid = int(question_id)
+        item = self.items_by_id.get(qid)
+        if not item:
+            item = next((x for x in self.item_bank_schema.get("items", []) if int(x["id"]) == qid), None)
+        if not item:
+            raise ValueError(f"Question ID {qid} not found in active item pool.")
+        return morph_question_for_context(item, context_profile)
+
+    def contextualize_questions_batch(
+        self,
+        question_ids: Optional[List[int]] = None,
+        context_profile: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Contextualizes a list of question IDs (defaults to the core 15 questions if omitted)
+        for a given age_band, ses_life_context, locale, language, and custom_bio.
+        """
+        if not question_ids:
+            question_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        results = []
+        for qid in question_ids:
+            try:
+                results.append(self.morph_question_context(int(qid), context_profile))
+            except Exception:
+                continue
+        return {
+            "count": len(results),
+            "context_profile": context_profile or {},
+            "items": results,
         }
 
     def infer_neurodevelopmental_mask_probabilities(

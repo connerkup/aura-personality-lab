@@ -14,7 +14,7 @@ class ScoreAssessmentRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, description="Optional existing session_id to update.")
     responses: Dict[str, Union[int, float]] = Field(
         default_factory=dict,
-        description="Map of question ID ('1'..'15') to Likert response (1..5).",
+        description="Map of question ID ('1'..'120') to Likert response (1..5).",
     )
     mask_id: Optional[str] = Field(
         default="auto",
@@ -48,11 +48,68 @@ class DecomposeRequest(BaseModel):
     telemetry: Optional[Dict[str, Any]] = Field(default=None)
 
 
+class ContextProfilePayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    age_band: str = Field(
+        default="25_39",
+        description="Target age band: '18_24', '25_39', '40_59', or '60_plus'.",
+    )
+    ses_life_context: str = Field(
+        default="working_practical",
+        description="Life & socioeconomic ecology: 'working_practical', 'student_early', 'knowledge_remote', or 'caregiver_family'.",
+    )
+    locale: str = Field(
+        default="urban",
+        description="Geographic ecology: 'urban', 'suburban', or 'rural'.",
+    )
+    language: str = Field(
+        default="en",
+        description="ISO language code: 'en', 'es', 'fr', 'pt', or 'ja'.",
+    )
+    custom_bio: Optional[str] = Field(
+        default="",
+        description="Optional free-text user bio (e.g., '23yo line cook & artist in Chicago' or '42yo rural paramedic').",
+    )
+
+
 class AdaptiveNextItemRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    answered_ids: List[int] = Field(default_factory=list)
-    current_scores: Optional[Dict[str, float]] = Field(default=None)
+    answered_ids: List[int] = Field(default_factory=list, description="List of already-answered question IDs.")
+    current_scores: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional domain percentile estimates (O, C, E, A, N in 0..100).",
+    )
+    responses: Optional[Dict[str, Union[int, float]]] = Field(
+        default=None,
+        description="Optional map of answered question IDs to Likert responses (1..5) for live 2PL IRT & conditional branch evaluation.",
+    )
+    telemetry: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional Mind Moments telemetry for conditional telemetry branch triggers.",
+    )
+    context_profile: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional demographic/life-context profile to return DIF-free contextualized text alongside the selected item.",
+    )
+
+
+class ContextualMorphRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    question_id: Optional[int] = Field(
+        default=1,
+        description="Question ID to contextually morph (1..120).",
+    )
+    question_ids: Optional[List[int]] = Field(
+        default=None,
+        description="Optional batch of question IDs to contextualize in one call.",
+    )
+    context_profile: ContextProfilePayload = Field(
+        default_factory=ContextProfilePayload,
+        description="Age, SES/life context, locale, language, and optional custom bio.",
+    )
 
 
 class ChemistryPersonPayload(BaseModel):
@@ -81,8 +138,14 @@ class StudioQuestionUpsertRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: Optional[int] = Field(default=None, description="Question ID (omit to auto-assign next integer ID).")
+    slug: Optional[str] = Field(default=None, description="Deterministic human-readable slug (e.g., 'q-121-custom-probe').")
     domain: str = Field(default="C", description="Target Big Five domain: O, C, E, A, or N.")
-    aspect: str = Field(default="Everyday Behavioral Probe", description="DeYoung 10-aspect or behavioral sub-construct.")
+    deyoung_aspect: Optional[str] = Field(default=None, description="DeYoung aspect code (e.g., 'C_orderliness', 'O_intellect').")
+    aspect: str = Field(default="Everyday Behavioral Probe", description="DeYoung 10-aspect or behavioral sub-construct label.")
+    node_tier: str = Field(
+        default="everyday_moment",
+        description="Node tier in the 120-item CAT tree: 'anchor', 'branch_probe', 'deep_resolution', or 'everyday_moment'.",
+    )
     layer: str = Field(default="shadow_behavioral_probe", description="Psychometric layer identifier.")
     probe_type: str = Field(default="sneaky_custom_probe", description="Short slug for probe mechanism.")
     calibration_status: str = Field(
@@ -101,7 +164,24 @@ class StudioQuestionUpsertRequest(BaseModel):
         default="",
         description="Internal scientific rationale for Kae & Conner's studio.",
     )
+    parent_trigger: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional conditional parent trigger rule for tree branching.",
+    )
     active: bool = Field(default=True)
+
+
+class StudioQuestionBulkUpsertRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    questions: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Array of question objects to bulk-upsert into SQLite and item_bank_irt.json.",
+    )
+    items: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Alias for `questions`.",
+    )
 
 
 class StudioBranchRule(BaseModel):

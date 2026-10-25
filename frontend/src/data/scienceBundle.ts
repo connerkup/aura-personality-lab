@@ -6,6 +6,7 @@ import {
   ShadowCalibrationRow,
   StudioFlow,
 } from '../types/aura';
+import { ADAPTIVE_POOL_120 } from './adaptivePool120';
 
 export const ARCHETYPES: Record<
   string,
@@ -1107,10 +1108,10 @@ export const AURA_SCIENCE_BUNDLE = {
     masks: INITIAL_MASKS,
   },
   item_bank_schema: {
-    schema_version: '4.0.0',
+    schema_version: '5.0.0',
     description:
-      '15-Item Epistemic Blind-Inference & Shadow Calibration Bank (12 Calibrated Anchors + 3 Disarming Sneaky Behavioral Micro-Questions).',
-    items: INITIAL_ITEMS,
+      '120-Item Dynamic Question Tree & CAT Pool (12 Calibrated Anchors, 35 Branch Probes, 50 Deep-Resolution 2PL IRT Items, 23 Everyday Moment Sneaky Habit Probes).',
+    items: ADAPTIVE_POOL_120,
   },
   papers_corpus: PAPERS_CORPUS,
   shadow_calibration_matrix: INITIAL_SHADOW_CALIBRATION_MATRIX,

@@ -5,7 +5,7 @@ Database file: `/home/ubuntu/personality-lab/backend/aura_production.db`
 Tables:
   1. `assessment_sessions` — User assessment sessions, responses, micro-game telemetry, inferred mask, debiased scores.
   2. `shadow_telemetry`    — Seeded with 25 realistic synthetic multi-mask sessions on startup for live shadow-item calibration.
-  3. `questions`           — Live editable item bank synced with `science/models/item_bank_irt.json`.
+  3. `questions`           — Live editable 120+ item bank synced with `science/models/item_bank_irt.json` and `ADAPTIVE_ITEM_POOL_120`.
   4. `assessment_flows`    — Experimental question sequences, Mind Moments toggles, and conditional branching rules for Kae & Conner.
 """
 
@@ -13,11 +13,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import sqlite3
 from typing import Any, Dict, List, Optional
 import uuid
 
 from science.engine.neuro_psychometrics import NeuroPsychometricEngine
+from science.models.adaptive_item_pool_120 import ADAPTIVE_ITEM_POOL_120, DEYOUNG_ASPECT_LABELS
 
 BACKEND_DIR = Path(__file__).resolve().parent
 DB_PATH = BACKEND_DIR / "aura_production.db"
@@ -25,6 +27,48 @@ DB_PATH = BACKEND_DIR / "aura_production.db"
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _make_slug(qid: int, text: str, provided_slug: Optional[str] = None) -> str:
+    if provided_slug and str(provided_slug).strip():
+        return str(provided_slug).strip()
+    words = re.findall(r"[a-z0-9]+", (text or "probe").lower())
+    short = "-".join(words[:4]) if words else "probe"
+    return f"q-{qid:03d}-{short[:32]}"
+
+
+def _infer_deyoung_aspect(domain: str, aspect_label: str, provided: Optional[str] = None) -> str:
+    if provided and str(provided).strip():
+        return str(provided).strip()
+    low = (aspect_label or "").lower()
+    if "intellect" in low or "system" in low:
+        return "O_intellect"
+    if "openness" in low or "perceptual" in low or "aesthetic" in low:
+        return "O_openness"
+    if "industrious" in low or "drive" in low:
+        return "C_industriousness"
+    if "order" in low or "entropy" in low:
+        return "C_orderliness"
+    if "enthusiasm" in low or "affiliative" in low:
+        return "E_enthusiasm"
+    if "assertive" in low or "agency" in low:
+        return "E_assertiveness"
+    if "compassion" in low or "resonance" in low:
+        return "A_compassion"
+    if "polite" in low or "normative" in low:
+        return "A_politeness"
+    if "withdrawal" in low or "vigilance" in low:
+        return "N_withdrawal"
+    if "volatility" in low or "affective" in low:
+        return "N_volatility"
+    defaults = {
+        "O": "O_intellect",
+        "C": "C_industriousness",
+        "E": "E_enthusiasm",
+        "A": "A_compassion",
+        "N": "N_withdrawal",
+    }
+    return defaults.get(domain, "O_intellect")
 
 
 def get_connection() -> sqlite3.Connection:
@@ -130,6 +174,44 @@ DEFAULT_FLOWS: List[Dict[str, Any]] = [
             },
         ],
     },
+    {
+        "id": "cat_120_adaptive_tree",
+        "name": "120-Item Dynamic CAT & Conditional Branching Tree",
+        "description": "Conner & Kae's full 120-item 2PL IRT Adaptive Tree: starts with symmetry-breaking anchors, branches into conditional probes (IDs 16–55), resolves latent traits via DeYoung aspect probes (IDs 56–95), and validates with sneaky everyday micro-moments (IDs 96–120).",
+        "is_active_default": 0,
+        "question_ids": [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 16, 24, 32, 40, 48, 58, 66, 74, 82, 90, 96, 100, 101],
+        "mind_moments": ["pulse_reaction", "constellation_memory", "minds_eye"],
+        "branches": [
+            {
+                "if_question_id": 3,
+                "operator": ">=",
+                "threshold": 4,
+                "then_inject_question_id": 24,
+                "note": "High curiosity-vs-routine split -> inject Spark & Sprint urgency probe (Q24)",
+            },
+            {
+                "if_question_id": 5,
+                "operator": ">=",
+                "threshold": 4,
+                "then_inject_question_id": 32,
+                "note": "High two-voice acoustic load -> inject 1-on-1 Dyadic Depth probe (Q32)",
+            },
+            {
+                "if_question_id": 7,
+                "operator": ">=",
+                "threshold": 4,
+                "then_inject_question_id": 40,
+                "note": "High mutual-hearing priority -> inject Room Weather resonance probe (Q40)",
+            },
+            {
+                "if_question_id": 9,
+                "operator": ">=",
+                "threshold": 4,
+                "then_inject_question_id": 48,
+                "note": "High protective foresight -> inject 'What-If' Scenario Tree probe (Q48)",
+            },
+        ],
+    },
 ]
 
 
@@ -171,8 +253,11 @@ def init_db(engine: Optional[NeuroPsychometricEngine] = None) -> None:
                 """
                 CREATE TABLE IF NOT EXISTS questions (
                     id INTEGER PRIMARY KEY,
+                    slug TEXT NOT NULL DEFAULT '',
                     domain TEXT NOT NULL,
+                    deyoung_aspect TEXT NOT NULL DEFAULT '',
                     aspect TEXT NOT NULL,
+                    node_tier TEXT NOT NULL DEFAULT 'anchor',
                     layer TEXT NOT NULL,
                     probe_type TEXT NOT NULL,
                     calibration_status TEXT NOT NULL DEFAULT 'calibrated_anchor',
@@ -185,10 +270,23 @@ def init_db(engine: Optional[NeuroPsychometricEngine] = None) -> None:
                     text TEXT NOT NULL,
                     calm_theme TEXT NOT NULL DEFAULT 'Everyday reflection',
                     scientific_hypothesis TEXT NOT NULL DEFAULT '',
+                    parent_trigger_json TEXT DEFAULT NULL,
                     active INTEGER NOT NULL DEFAULT 1
                 );
                 """
             )
+            # Seamless schema migration for existing aura_production.db
+            for col_ddl in [
+                "ALTER TABLE questions ADD COLUMN slug TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE questions ADD COLUMN deyoung_aspect TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE questions ADD COLUMN node_tier TEXT NOT NULL DEFAULT 'anchor'",
+                "ALTER TABLE questions ADD COLUMN parent_trigger_json TEXT DEFAULT NULL",
+            ]:
+                try:
+                    conn.execute(col_ddl)
+                except sqlite3.OperationalError:
+                    pass
+
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS assessment_flows (
@@ -204,16 +302,155 @@ def init_db(engine: Optional[NeuroPsychometricEngine] = None) -> None:
                 """
             )
 
-            # Seed shadow_telemetry with 25 realistic synthetic calibration sessions if empty
-            cur = conn.execute("SELECT COUNT(*) AS cnt FROM shadow_telemetry;")
+            # Seed / upgrade all 120 calibrated items from ADAPTIVE_ITEM_POOL_120
+            pool_by_id = {int(it["id"]): it for it in ADAPTIVE_ITEM_POOL_120}
+            for item in ADAPTIVE_ITEM_POOL_120:
+                qid = int(item["id"])
+                slug = _make_slug(qid, item.get("text", ""), item.get("slug"))
+                dom = str(item.get("domain", "O"))
+                aspect_str = str(item.get("aspect", "General"))
+                deyoung_asp = _infer_deyoung_aspect(dom, aspect_str, item.get("deyoung_aspect"))
+                node_tier = str(item.get("node_tier", "anchor"))
+                pt_json = json.dumps(item["parent_trigger"]) if item.get("parent_trigger") else None
+
+                conn.execute(
+                    """
+                    INSERT INTO questions (
+                        id, slug, domain, deyoung_aspect, aspect, node_tier,
+                        layer, probe_type, calibration_status,
+                        empirical_prior_r, direction, weight, irt_a, irt_b,
+                        mood_halo_loading, text, calm_theme, scientific_hypothesis,
+                        parent_trigger_json, active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    ON CONFLICT(id) DO UPDATE SET
+                        slug = CASE WHEN questions.slug = '' THEN excluded.slug ELSE questions.slug END,
+                        deyoung_aspect = CASE WHEN questions.deyoung_aspect = '' THEN excluded.deyoung_aspect ELSE questions.deyoung_aspect END,
+                        node_tier = excluded.node_tier,
+                        parent_trigger_json = COALESCE(questions.parent_trigger_json, excluded.parent_trigger_json),
+                        scientific_hypothesis = CASE WHEN questions.scientific_hypothesis = '' THEN excluded.scientific_hypothesis ELSE questions.scientific_hypothesis END,
+                        empirical_prior_r = CASE WHEN questions.empirical_prior_r = 0.0 THEN excluded.empirical_prior_r ELSE questions.empirical_prior_r END;
+                    """,
+                    (
+                        qid,
+                        slug,
+                        dom,
+                        deyoung_asp,
+                        aspect_str,
+                        node_tier,
+                        str(item.get("layer", "cortical_invariant")),
+                        str(item.get("probe_type", "general_probe")),
+                        str(item.get("calibration_status", "calibrated_anchor")),
+                        float(item.get("empirical_prior_r", 0.0)),
+                        int(item.get("direction", 1)),
+                        float(item.get("weight", 1.0)),
+                        float(item.get("irt_a", 1.5)),
+                        float(item.get("irt_b", 0.0)),
+                        float(item.get("mood_halo_loading", 0.2)),
+                        str(item.get("text", "")),
+                        str(item.get("calm_theme", "Everyday reflection")),
+                        str(item.get("scientific_hypothesis", "")),
+                        pt_json,
+                    ),
+                )
+
+            # Also ensure any additional items in engine.item_bank_schema are preserved
+            for item in engine.item_bank_schema.get("items", []):
+                qid = int(item["id"])
+                if qid in pool_by_id:
+                    continue
+                slug = _make_slug(qid, item.get("text", ""), item.get("slug"))
+                dom = str(item.get("domain", "O"))
+                aspect_str = str(item.get("aspect", "General"))
+                deyoung_asp = _infer_deyoung_aspect(dom, aspect_str, item.get("deyoung_aspect"))
+                node_tier = str(item.get("node_tier", "everyday_moment"))
+                pt_json = json.dumps(item["parent_trigger"]) if item.get("parent_trigger") else None
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO questions (
+                        id, slug, domain, deyoung_aspect, aspect, node_tier,
+                        layer, probe_type, calibration_status,
+                        empirical_prior_r, direction, weight, irt_a, irt_b,
+                        mood_halo_loading, text, calm_theme, scientific_hypothesis,
+                        parent_trigger_json, active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
+                    """,
+                    (
+                        qid,
+                        slug,
+                        dom,
+                        deyoung_asp,
+                        aspect_str,
+                        node_tier,
+                        str(item.get("layer", "cortical_invariant")),
+                        str(item.get("probe_type", "general_probe")),
+                        str(item.get("calibration_status", "calibrated_anchor")),
+                        float(item.get("empirical_prior_r", 0.0)),
+                        int(item.get("direction", 1)),
+                        float(item.get("weight", 1.0)),
+                        float(item.get("irt_a", 1.5)),
+                        float(item.get("irt_b", 0.0)),
+                        float(item.get("mood_halo_loading", 0.2)),
+                        str(item.get("text", "")),
+                        str(item.get("calm_theme", "Everyday reflection")),
+                        str(item.get("scientific_hypothesis", "")),
+                        pt_json,
+                    ),
+                )
+
+            # Seed assessment_flows with the default experimental flows if missing
+            now_str = _utc_now()
+            cur_f = conn.execute("SELECT COUNT(*) AS cnt FROM assessment_flows;")
+            has_any_flow = int(cur_f.fetchone()["cnt"]) > 0
+            for fl in DEFAULT_FLOWS:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO assessment_flows (
+                        id, name, description, is_active_default,
+                        question_ids_json, mind_moments_json, branches_json, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        fl["id"],
+                        fl["name"],
+                        fl["description"],
+                        int(fl["is_active_default"]) if not has_any_flow else 0,
+                        json.dumps(fl["question_ids"]),
+                        json.dumps(fl["mind_moments"]),
+                        json.dumps(fl["branches"]),
+                        now_str,
+                    ),
+                )
+    finally:
+        conn.close()
+
+    # Sync all 120+ active questions to item_bank_irt.json & reload engine
+    _sync_questions_to_json(engine)
+
+    # Seed or refresh synthetic shadow_telemetry if empty or if seeded before 120-item pool upgrade
+    conn2 = get_connection()
+    try:
+        with conn2:
+            cur = conn2.execute("SELECT COUNT(*) AS cnt FROM shadow_telemetry;")
             shadow_count = int(cur.fetchone()["cnt"])
-            if shadow_count == 0:
+            needs_refresh = shadow_count == 0
+            if not needs_refresh:
+                sample_row = conn2.execute(
+                    "SELECT responses_json FROM shadow_telemetry WHERE id LIKE 'syn-cal-%' LIMIT 1;"
+                ).fetchone()
+                if sample_row:
+                    try:
+                        parsed_resp = json.loads(sample_row["responses_json"])
+                        if len(parsed_resp) < 100:
+                            needs_refresh = True
+                    except Exception:
+                        needs_refresh = True
+            if needs_refresh:
                 syn_sessions = engine.generate_synthetic_calibration_sessions(n_sessions=25, seed=2026)
                 now_str = _utc_now()
                 for s in syn_sessions:
-                    conn.execute(
+                    conn2.execute(
                         """
-                        INSERT INTO shadow_telemetry (
+                        INSERT OR REPLACE INTO shadow_telemetry (
                             id, true_mask_id, inferred_mask_id, responses_json,
                             telemetry_json, anchor_scores_json, debiased_scores_json, created_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
@@ -229,61 +466,8 @@ def init_db(engine: Optional[NeuroPsychometricEngine] = None) -> None:
                             now_str,
                         ),
                     )
-
-            # Seed questions from item_bank_irt.json if empty or missing new items
-            for item in engine.item_bank_schema.get("items", []):
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO questions (
-                        id, domain, aspect, layer, probe_type, calibration_status,
-                        empirical_prior_r, direction, weight, irt_a, irt_b,
-                        mood_halo_loading, text, calm_theme, scientific_hypothesis, active
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
-                    """,
-                    (
-                        int(item["id"]),
-                        str(item.get("domain", "O")),
-                        str(item.get("aspect", "General")),
-                        str(item.get("layer", "cortical_invariant")),
-                        str(item.get("probe_type", "general_probe")),
-                        str(item.get("calibration_status", "calibrated_anchor")),
-                        float(item.get("empirical_prior_r", 0.0)),
-                        int(item.get("direction", 1)),
-                        float(item.get("weight", 1.0)),
-                        float(item.get("irt_a", 1.5)),
-                        float(item.get("irt_b", 0.0)),
-                        float(item.get("mood_halo_loading", 0.2)),
-                        str(item.get("text", "")),
-                        str(item.get("calm_theme", "Everyday reflection")),
-                        str(item.get("scientific_hypothesis", "")),
-                    ),
-                )
-
-            # Seed assessment_flows with the 3 default experimental flows if empty
-            cur_f = conn.execute("SELECT COUNT(*) AS cnt FROM assessment_flows;")
-            if int(cur_f.fetchone()["cnt"]) == 0:
-                now_str = _utc_now()
-                for fl in DEFAULT_FLOWS:
-                    conn.execute(
-                        """
-                        INSERT INTO assessment_flows (
-                            id, name, description, is_active_default,
-                            question_ids_json, mind_moments_json, branches_json, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-                        """,
-                        (
-                            fl["id"],
-                            fl["name"],
-                            fl["description"],
-                            int(fl["is_active_default"]),
-                            json.dumps(fl["question_ids"]),
-                            json.dumps(fl["mind_moments"]),
-                            json.dumps(fl["branches"]),
-                            now_str,
-                        ),
-                    )
     finally:
-        conn.close()
+        conn2.close()
 
 
 def save_assessment_session(
@@ -384,6 +568,49 @@ def get_all_calibration_records() -> List[Dict[str, Any]]:
     return records
 
 
+def _row_to_question_dict(r: sqlite3.Row) -> Dict[str, Any]:
+    keys = r.keys()
+    qid = int(r["id"])
+    dom = r["domain"]
+    aspect_str = r["aspect"]
+    slug = r["slug"] if "slug" in keys and r["slug"] else _make_slug(qid, r["text"])
+    deyoung_asp = (
+        r["deyoung_aspect"]
+        if "deyoung_aspect" in keys and r["deyoung_aspect"]
+        else _infer_deyoung_aspect(dom, aspect_str)
+    )
+    node_tier = r["node_tier"] if "node_tier" in keys and r["node_tier"] else "anchor"
+    parent_trigger = None
+    if "parent_trigger_json" in keys and r["parent_trigger_json"]:
+        try:
+            parent_trigger = json.loads(r["parent_trigger_json"])
+        except Exception:
+            parent_trigger = None
+
+    return {
+        "id": qid,
+        "slug": slug,
+        "domain": dom,
+        "deyoung_aspect": deyoung_asp,
+        "aspect": aspect_str,
+        "node_tier": node_tier,
+        "layer": r["layer"],
+        "probe_type": r["probe_type"],
+        "calibration_status": r["calibration_status"],
+        "empirical_prior_r": float(r["empirical_prior_r"]),
+        "direction": int(r["direction"]),
+        "weight": float(r["weight"]),
+        "irt_a": float(r["irt_a"]),
+        "irt_b": float(r["irt_b"]),
+        "mood_halo_loading": float(r["mood_halo_loading"]),
+        "text": r["text"],
+        "calm_theme": r["calm_theme"],
+        "scientific_hypothesis": r["scientific_hypothesis"],
+        "parent_trigger": parent_trigger,
+        "active": bool(r["active"]),
+    }
+
+
 def list_questions(active_only: bool = False) -> List[Dict[str, Any]]:
     conn = get_connection()
     try:
@@ -392,27 +619,7 @@ def list_questions(active_only: bool = False) -> List[Dict[str, Any]]:
             sql += " WHERE active = 1"
         sql += " ORDER BY id ASC;"
         rows = conn.execute(sql).fetchall()
-        return [
-            {
-                "id": int(r["id"]),
-                "domain": r["domain"],
-                "aspect": r["aspect"],
-                "layer": r["layer"],
-                "probe_type": r["probe_type"],
-                "calibration_status": r["calibration_status"],
-                "empirical_prior_r": float(r["empirical_prior_r"]),
-                "direction": int(r["direction"]),
-                "weight": float(r["weight"]),
-                "irt_a": float(r["irt_a"]),
-                "irt_b": float(r["irt_b"]),
-                "mood_halo_loading": float(r["mood_halo_loading"]),
-                "text": r["text"],
-                "calm_theme": r["calm_theme"],
-                "scientific_hypothesis": r["scientific_hypothesis"],
-                "active": bool(r["active"]),
-            }
-            for r in rows
-        ]
+        return [_row_to_question_dict(r) for r in rows]
     finally:
         conn.close()
 
@@ -421,10 +628,13 @@ def _sync_questions_to_json(engine: NeuroPsychometricEngine) -> None:
     active_items = list_questions(active_only=True)
     clean_items = []
     for it in active_items:
-        item_dict = {
+        item_dict: Dict[str, Any] = {
             "id": it["id"],
+            "slug": it["slug"],
             "domain": it["domain"],
+            "deyoung_aspect": it["deyoung_aspect"],
             "aspect": it["aspect"],
+            "node_tier": it["node_tier"],
             "layer": it["layer"],
             "probe_type": it["probe_type"],
             "calibration_status": it["calibration_status"],
@@ -440,78 +650,139 @@ def _sync_questions_to_json(engine: NeuroPsychometricEngine) -> None:
             item_dict["empirical_prior_r"] = it["empirical_prior_r"]
         if it.get("scientific_hypothesis"):
             item_dict["scientific_hypothesis"] = it["scientific_hypothesis"]
+        if it.get("parent_trigger") is not None:
+            item_dict["parent_trigger"] = it["parent_trigger"]
         clean_items.append(item_dict)
 
+    engine.item_bank_schema["schema_version"] = "5.0.0"
+    engine.item_bank_schema["description"] = (
+        f"{len(clean_items)}-Item Calibrated Adaptive Question Tree & Epistemic Blind-Inference Bank "
+        "(12 Core Anchors, 40 Conditional Branch Probes, 40 DeYoung 2PL IRT Deep-Resolution Items, "
+        "and 28 Disarming Everyday Behavioral Micro-Questions)."
+    )
     engine.item_bank_schema["items"] = clean_items
     with open(engine.models_dir / "item_bank_irt.json", "w", encoding="utf-8") as f:
         json.dump(engine.item_bank_schema, f, indent=2, ensure_ascii=False)
     engine.reload_models()
 
 
+def _upsert_question_row(conn: sqlite3.Connection, q_data: Dict[str, Any]) -> int:
+    qid = q_data.get("id")
+    if qid is None:
+        row = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM questions;").fetchone()
+        qid = int(row["next_id"])
+    else:
+        qid = int(qid)
+
+    dom = str(q_data.get("domain", "O"))
+    deyoung_asp = _infer_deyoung_aspect(
+        dom, str(q_data.get("aspect", "")), q_data.get("deyoung_aspect")
+    )
+    default_aspect_label = DEYOUNG_ASPECT_LABELS.get(deyoung_asp, "Everyday Behavioral Probe")
+    aspect_str = str(q_data.get("aspect") or default_aspect_label)
+    node_tier = str(q_data.get("node_tier", "everyday_moment"))
+    calibration_status = str(
+        q_data.get(
+            "calibration_status",
+            "shadow_candidate" if node_tier == "everyday_moment" else "calibrated_anchor",
+        )
+    )
+    default_weight = 0.0 if calibration_status == "shadow_candidate" else 1.15
+    weight = (
+        float(q_data["weight"])
+        if "weight" in q_data and q_data["weight"] is not None
+        else default_weight
+    )
+    text_str = str(q_data.get("text", ""))
+    slug = _make_slug(qid, text_str, q_data.get("slug"))
+    parent_trigger = q_data.get("parent_trigger")
+    pt_json = json.dumps(parent_trigger) if parent_trigger is not None else None
+
+    conn.execute(
+        """
+        INSERT INTO questions (
+            id, slug, domain, deyoung_aspect, aspect, node_tier,
+            layer, probe_type, calibration_status,
+            empirical_prior_r, direction, weight, irt_a, irt_b,
+            mood_halo_loading, text, calm_theme, scientific_hypothesis,
+            parent_trigger_json, active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            slug = excluded.slug,
+            domain = excluded.domain,
+            deyoung_aspect = excluded.deyoung_aspect,
+            aspect = excluded.aspect,
+            node_tier = excluded.node_tier,
+            layer = excluded.layer,
+            probe_type = excluded.probe_type,
+            calibration_status = excluded.calibration_status,
+            empirical_prior_r = excluded.empirical_prior_r,
+            direction = excluded.direction,
+            weight = excluded.weight,
+            irt_a = excluded.irt_a,
+            irt_b = excluded.irt_b,
+            mood_halo_loading = excluded.mood_halo_loading,
+            text = excluded.text,
+            calm_theme = excluded.calm_theme,
+            scientific_hypothesis = excluded.scientific_hypothesis,
+            parent_trigger_json = excluded.parent_trigger_json,
+            active = excluded.active;
+        """,
+        (
+            qid,
+            slug,
+            dom,
+            deyoung_asp,
+            aspect_str,
+            node_tier,
+            str(q_data.get("layer", "shadow_behavioral_probe")),
+            str(q_data.get("probe_type", "sneaky_custom_probe")),
+            calibration_status,
+            float(q_data.get("empirical_prior_r", 0.45)),
+            int(q_data.get("direction", 1)),
+            weight,
+            float(q_data.get("irt_a", 1.45)),
+            float(q_data.get("irt_b", 0.0)),
+            float(q_data.get("mood_halo_loading", 0.18)),
+            text_str,
+            str(q_data.get("calm_theme", "Everyday habit")),
+            str(q_data.get("scientific_hypothesis", "")),
+            pt_json,
+            1 if q_data.get("active", True) else 0,
+        ),
+    )
+    return qid
+
+
 def upsert_question(q_data: Dict[str, Any], engine: NeuroPsychometricEngine) -> Dict[str, Any]:
     conn = get_connection()
     try:
         with conn:
-            qid = q_data.get("id")
-            if qid is None:
-                row = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM questions;").fetchone()
-                qid = int(row["next_id"])
-            else:
-                qid = int(qid)
-
-            calibration_status = str(q_data.get("calibration_status", "shadow_candidate"))
-            default_weight = 0.0 if calibration_status == "shadow_candidate" else 1.15
-            weight = float(q_data["weight"]) if "weight" in q_data and q_data["weight"] is not None else default_weight
-
-            conn.execute(
-                """
-                INSERT INTO questions (
-                    id, domain, aspect, layer, probe_type, calibration_status,
-                    empirical_prior_r, direction, weight, irt_a, irt_b,
-                    mood_halo_loading, text, calm_theme, scientific_hypothesis, active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    domain = excluded.domain,
-                    aspect = excluded.aspect,
-                    layer = excluded.layer,
-                    probe_type = excluded.probe_type,
-                    calibration_status = excluded.calibration_status,
-                    empirical_prior_r = excluded.empirical_prior_r,
-                    direction = excluded.direction,
-                    weight = excluded.weight,
-                    irt_a = excluded.irt_a,
-                    irt_b = excluded.irt_b,
-                    mood_halo_loading = excluded.mood_halo_loading,
-                    text = excluded.text,
-                    calm_theme = excluded.calm_theme,
-                    scientific_hypothesis = excluded.scientific_hypothesis,
-                    active = excluded.active;
-                """,
-                (
-                    qid,
-                    str(q_data.get("domain", "O")),
-                    str(q_data.get("aspect", "Everyday Behavioral Probe")),
-                    str(q_data.get("layer", "shadow_behavioral_probe")),
-                    str(q_data.get("probe_type", "sneaky_custom_probe")),
-                    calibration_status,
-                    float(q_data.get("empirical_prior_r", 0.45)),
-                    int(q_data.get("direction", 1)),
-                    weight,
-                    float(q_data.get("irt_a", 1.45)),
-                    float(q_data.get("irt_b", 0.0)),
-                    float(q_data.get("mood_halo_loading", 0.18)),
-                    str(q_data.get("text", "")),
-                    str(q_data.get("calm_theme", "Everyday habit")),
-                    str(q_data.get("scientific_hypothesis", "")),
-                    1 if q_data.get("active", True) else 0,
-                ),
-            )
+            qid = _upsert_question_row(conn, q_data)
     finally:
         conn.close()
 
     _sync_questions_to_json(engine)
     questions = {q["id"]: q for q in list_questions(active_only=False)}
     return questions[qid]
+
+
+def bulk_upsert_questions(
+    items_list: List[Dict[str, Any]], engine: NeuroPsychometricEngine
+) -> List[Dict[str, Any]]:
+    upserted_ids: List[int] = []
+    conn = get_connection()
+    try:
+        with conn:
+            for q_data in items_list:
+                qid = _upsert_question_row(conn, q_data)
+                upserted_ids.append(qid)
+    finally:
+        conn.close()
+
+    _sync_questions_to_json(engine)
+    questions_by_id = {q["id"]: q for q in list_questions(active_only=False)}
+    return [questions_by_id[qid] for qid in upserted_ids if qid in questions_by_id]
 
 
 def delete_or_toggle_question(

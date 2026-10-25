@@ -1,10 +1,17 @@
 import {
+  ADAPTIVE_POOL_120,
+  getAdaptiveQuestionSlug,
+  morphQuestionForContext,
+  selectNextAdaptiveQuestionClient,
+} from '../data/adaptivePool120';
+import {
   AURA_SCIENCE_BUNDLE,
   CALM_DIMENSION_LABELS,
   INITIAL_SHADOW_CALIBRATION_MATRIX,
   INITIAL_STUDIO_FLOWS,
 } from '../data/scienceBundle';
 import {
+  AdaptiveSelectionResult,
   ChemistryResult,
   CohortSimulationResult,
   DecompositionResult,
@@ -14,12 +21,16 @@ import {
   IRTScoringResult,
   ItemBankQuestion,
   MaskPosterior,
+  MorphedQuestionResult,
+  NodeTier,
+  ParentTriggerRule,
   ScoreAssessmentResult,
   ShadowCalibrationRow,
   ShadowItemDiagnostic,
   StudioFlow,
   TelemetryProfile,
   TelemetryState,
+  UserContextProfile,
 } from '../types/aura';
 
 const DOMAIN_KEYS: DomainKey[] = ['O', 'C', 'E', 'A', 'N'];
@@ -28,7 +39,44 @@ function clamp(val: number, low = 2.0, high = 98.0): number {
   return Math.max(low, Math.min(high, val));
 }
 
-const STUDIO_STORAGE_KEY = 'aura_kae_studio_state_v2';
+const STUDIO_STORAGE_KEY = 'aura_kae_studio_state_v3_120';
+
+function mergePoolWithCustomQuestions(customList?: ItemBankQuestion[]): ItemBankQuestion[] {
+  const byId = new Map<number, ItemBankQuestion>();
+  for (const baseItem of ADAPTIVE_POOL_120) {
+    byId.set(Number(baseItem.id), {
+      ...baseItem,
+      slug: getAdaptiveQuestionSlug(baseItem),
+    });
+  }
+  if (Array.isArray(customList)) {
+    for (const raw of customList) {
+      if (!raw || typeof raw.id === 'undefined') continue;
+      const id = Number(raw.id);
+      const existing = byId.get(id);
+      const merged: ItemBankQuestion = {
+        ...(existing || {}),
+        ...raw,
+        id,
+        node_tier:
+          raw.node_tier ||
+          existing?.node_tier ||
+          (id <= 12
+            ? 'anchor'
+            : id <= 15 || id >= 101
+            ? 'everyday_moment'
+            : id <= 50
+            ? 'branch_probe'
+            : 'deep_resolution'),
+        parent_trigger:
+          raw.parent_trigger !== undefined ? raw.parent_trigger : existing?.parent_trigger || null,
+      };
+      merged.slug = getAdaptiveQuestionSlug(merged);
+      byId.set(id, merged);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => a.id - b.id);
+}
 
 interface LocalStudioState {
   questions: ItemBankQuestion[];
@@ -39,7 +87,7 @@ interface LocalStudioState {
 
 function loadLocalStudioState(): LocalStudioState {
   const defaultState: LocalStudioState = {
-    questions: [...AURA_SCIENCE_BUNDLE.item_bank_schema.items],
+    questions: mergePoolWithCustomQuestions(AURA_SCIENCE_BUNDLE.item_bank_schema.items),
     flows: JSON.parse(JSON.stringify(INITIAL_STUDIO_FLOWS)),
     active_flow_id: 'core_calm_12',
     shadow_calibration_matrix: JSON.parse(JSON.stringify(INITIAL_SHADOW_CALIBRATION_MATRIX)),
@@ -51,10 +99,7 @@ function loadLocalStudioState(): LocalStudioState {
     const raw = window.localStorage.getItem(STUDIO_STORAGE_KEY);
     if (!raw) return defaultState;
     const parsed = JSON.parse(raw) as Partial<LocalStudioState>;
-    const questions =
-      Array.isArray(parsed.questions) && parsed.questions.length >= 12
-        ? parsed.questions
-        : defaultState.questions;
+    const questions = mergePoolWithCustomQuestions(parsed.questions);
     const flows =
       Array.isArray(parsed.flows) && parsed.flows.length > 0
         ? parsed.flows
@@ -927,14 +972,11 @@ export const AuraAPI = {
         const data = await res.json();
         this.backendConnected = true;
         if (data && data.item_bank_schema && Array.isArray(data.item_bank_schema.items)) {
-          // Ensure items 13, 14, 15 are preserved if backend item bank has them or merge with local
           const localState = loadLocalStudioState();
-          const byId = new Map<number, ItemBankQuestion>();
-          for (const it of data.item_bank_schema.items) byId.set(Number(it.id), it);
-          for (const it of localState.questions) {
-            if (!byId.has(Number(it.id))) byId.set(Number(it.id), it);
-          }
-          data.item_bank_schema.items = Array.from(byId.values()).sort((a, b) => a.id - b.id);
+          data.item_bank_schema.items = mergePoolWithCustomQuestions([
+            ...localState.questions,
+            ...(data.item_bank_schema.items as ItemBankQuestion[]),
+          ]);
         }
         window.AURA_SCIENCE_BUNDLE = {
           ...AURA_SCIENCE_BUNDLE,
@@ -1034,6 +1076,59 @@ export const AuraAPI = {
     return EdgeScienceMirror.analyzeChemistry(payload);
   },
 
+  async getNextAdaptiveItem(payload: {
+    pool?: ItemBankQuestion[];
+    answeredIds: number[];
+    responses: Record<string | number, number>;
+    telemetry?: Partial<TelemetryState> | Record<string, unknown> | null;
+  }): Promise<AdaptiveSelectionResult> {
+    const localResult = selectNextAdaptiveQuestionClient(payload);
+    if (this.backendConnected) {
+      try {
+        const res = await fetch('/api/v1/assessment/next-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            answered_ids: payload.answeredIds,
+            responses: payload.responses,
+            telemetry: payload.telemetry || null,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const nextQ = data?.next_item || data?.nextItem;
+          if (nextQ && typeof nextQ.id !== 'undefined') {
+            return {
+              ...localResult,
+              nextItem: {
+                ...localResult.nextItem,
+                ...nextQ,
+                id: Number(nextQ.id),
+                slug: getAdaptiveQuestionSlug(nextQ),
+              },
+              selectionReason:
+                data.selection_reason || data.selectionReason || localResult.selectionReason,
+              poolSize: Number(data.pool_size ?? data.poolSize ?? localResult.poolSize),
+              remainingCount: Number(
+                data.remaining_count ?? data.remainingCount ?? localResult.remainingCount
+              ),
+            };
+          }
+        }
+      } catch {
+        // instantaneous fallback to client CAT engine
+      }
+    }
+    return localResult;
+  },
+
+  async morphQuestionContext(
+    question: ItemBankQuestion,
+    context?: Partial<UserContextProfile> | null
+  ): Promise<MorphedQuestionResult> {
+    return morphQuestionForContext(question, context);
+  },
+
   // ============================================================================
   // Kae & Conner Studio Collaboration Endpoints (with deterministic fallback)
   // ============================================================================
@@ -1051,7 +1146,10 @@ export const AuraAPI = {
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.questions)) {
-          const mergedQuestions = data.questions as ItemBankQuestion[];
+          const mergedQuestions = mergePoolWithCustomQuestions([
+            ...localState.questions,
+            ...(data.questions as ItemBankQuestion[]),
+          ]);
           const rawFlows = Array.isArray(data.flows) ? data.flows : localState.flows;
           const mergedFlows: StudioFlow[] = rawFlows.map((rf: Record<string, unknown>, fIdx: number) => {
             const rawBranches = Array.isArray(rf.branches) ? rf.branches : [];
@@ -1110,9 +1208,15 @@ export const AuraAPI = {
   },
 
   async addStudioQuestion(input: {
+    id?: number;
     text: string;
     calm_theme: string;
     domain: DomainKey;
+    aspect?: string;
+    node_tier?: NodeTier;
+    parent_trigger?: ParentTriggerRule | null;
+    irt_a?: number;
+    irt_b?: number;
     probe_type: string;
     calibration_status: 'calibrated_anchor' | 'shadow_candidate';
     direction: number;
@@ -1121,27 +1225,34 @@ export const AuraAPI = {
   }): Promise<ItemBankQuestion> {
     const localState = loadLocalStudioState();
     const nextId =
-      localState.questions.reduce((max, q) => Math.max(max, Number(q.id)), 15) + 1;
+      input.id ??
+      localState.questions.reduce((max, q) => Math.max(max, Number(q.id)), 120) + 1;
 
-    const isShadow = input.calibration_status === 'shadow_candidate';
+    const isShadow =
+      input.calibration_status === 'shadow_candidate' ||
+      input.node_tier === 'everyday_moment';
+    const calmTheme = input.calm_theme.trim() || 'Everyday reflection';
     const newQuestion: ItemBankQuestion = {
       id: nextId,
+      slug: getAdaptiveQuestionSlug({ id: nextId, calm_theme: calmTheme }),
+      node_tier: input.node_tier || (isShadow ? 'everyday_moment' : 'branch_probe'),
+      parent_trigger: input.parent_trigger ?? null,
       domain: input.domain,
-      aspect: CALM_DIMENSION_LABELS[input.domain]?.name || 'Custom Studio Probe',
+      aspect: input.aspect || CALM_DIMENSION_LABELS[input.domain]?.name || 'Custom Studio Probe',
       layer: isShadow ? 'shadow_behavioral_probe' : 'cortical_invariant',
       probe_type: input.probe_type || (isShadow ? 'sneaky_custom_probe' : 'cortical_prior'),
       calibration_status: input.calibration_status,
       empirical_prior_r: input.empirical_prior_r ?? (isShadow ? 0.54 : 0.65),
       direction: input.direction || 1,
       weight: isShadow ? 0.0 : 1.15,
-      irt_a: 1.5,
-      irt_b: 0.0,
+      irt_a: Number(input.irt_a ?? 1.65),
+      irt_b: Number(input.irt_b ?? 0.0),
       mood_halo_loading: 0.15,
       text: input.text.trim(),
-      calm_theme: input.calm_theme.trim() || 'Everyday reflection',
+      calm_theme: calmTheme,
       scientific_hypothesis:
         input.scientific_hypothesis ||
-        'Added in Kae & Conner Studio for live SAPA empirical calibration.',
+        'Added in Kae & Conner Studio for live CAT & SAPA empirical calibration.',
     };
 
     try {

@@ -61,6 +61,10 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
     const labels = ['Curiosity', 'Focus', 'Social', 'Warmth', 'Sensitivity'];
     const keys: DomainKey[] = ['O', 'C', 'E', 'A', 'N'];
 
+    const rootStyle = getComputedStyle(document.documentElement);
+    const primaryTextColor = rootStyle.getPropertyValue('--text-primary').trim() || '#232533';
+    const borderStroke = rootStyle.getPropertyValue('--glass-border').trim() || 'rgba(120,120,140,0.22)';
+
     for (let ring = 1; ring <= 4; ring++) {
       const r = (R * ring) / 4;
       ctx.beginPath();
@@ -72,7 +76,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
         else ctx.lineTo(x, y);
       }
       ctx.closePath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.strokeStyle = borderStroke;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -88,7 +92,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
     }
     ctx.closePath();
     ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = 'rgba(251, 191, 36, 0.85)';
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
     ctx.lineWidth = 1.6;
     ctx.stroke();
     ctx.setLineDash([]);
@@ -103,14 +107,14 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
       else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(167, 139, 250, 0.24)';
+    ctx.fillStyle = 'rgba(139, 92, 246, 0.24)';
     ctx.fill();
-    ctx.strokeStyle = '#a78bfa';
+    ctx.strokeStyle = '#8b5cf6';
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
     ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = primaryTextColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (let i = 0; i < 5; i++) {
@@ -183,7 +187,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
           type="button"
           onClick={onSharePortrait}
           className="aura-inline-text-btn"
-          style={{ color: '#c4b5fd' }}
+          style={{ color: 'var(--accent)', fontWeight: 600 }}
         >
           Share ↗
         </button>
@@ -373,7 +377,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             type="button"
             onClick={onOpenMindMoments}
             className="aura-inline-text-btn"
-            style={{ color: '#c4b5fd' }}
+            style={{ color: 'var(--accent)', fontWeight: 600 }}
           >
             Replay Moments →
           </button>
@@ -533,8 +537,9 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             style={{
               position: 'absolute',
               inset: '36px 0 0',
-              background: 'rgba(8,9,16,0.88)',
-              backdropFilter: 'blur(8px)',
+              background: 'var(--glass-bg)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: '18px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -587,7 +592,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             type="button"
             onClick={() => setChapter((prev) => Math.min(3, prev + 1) as 0 | 1 | 2 | 3)}
             className="aura-inline-text-btn"
-            style={{ color: '#c4b5fd' }}
+            style={{ color: 'var(--accent)', fontWeight: 600 }}
           >
             Next Chapter →
           </button>
@@ -596,7 +601,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             type="button"
             onClick={onSharePortrait}
             className="aura-inline-text-btn"
-            style={{ color: '#34d399' }}
+            style={{ color: 'var(--emerald)', fontWeight: 600 }}
           >
             Share Portrait ↗
           </button>

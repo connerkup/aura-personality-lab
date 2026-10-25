@@ -1,35 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ADAPTIVE_POOL_120,
+  DEFAULT_USER_CONTEXT,
+  EXACT_15_SLUGS,
+  buildDynamicAdaptivePath,
+  findQuestionBySlugOrId,
+  getAdaptiveQuestionSlug,
+  morphQuestionForContext,
+  selectNextAdaptiveQuestionClient,
+} from '../data/adaptivePool120';
 import { LIKERT_OPTIONS } from '../data/scienceBundle';
-import { ItemBankQuestion, StudioFlow, TelemetryState } from '../types/aura';
-import { MIND_MOMENT_SLUGS, MindMoments } from './MindMoments';
+import {
+  ItemBankQuestion,
+  StudioFlow,
+  TelemetryState,
+  UserContextProfile,
+} from '../types/aura';
+import { AURA_PALETTES } from './AuraWebGLCanvas';
+import {
+  AuraMicroGamesBridge,
+  MIND_MOMENT_SLUGS,
+  MindMoments,
+} from './MindMoments';
 
 export const QUESTION_SLUG_MAP: Record<number, string> = {
-  1: 'q-01-deeper-patterns',
-  2: 'q-02-subtle-shifts',
-  3: 'q-03-focus-flow',
-  4: 'q-04-tidy-space',
-  5: 'q-05-two-conversations',
-  6: 'q-06-group-momentum',
-  7: 'q-07-feeling-heard',
-  8: 'q-08-direct-truth',
-  9: 'q-09-looking-ahead',
-  10: 'q-10-sudden-change',
-  11: 'q-11-quiet-effort',
-  12: 'q-12-current-season',
-  13: 'q-13-browser-tabs',
-  14: 'q-14-text-warmth',
-  15: 'q-15-canceled-plans',
+  ...EXACT_15_SLUGS,
 };
 
 export function getQuestionSlug(q: ItemBankQuestion): string {
-  if (QUESTION_SLUG_MAP[q.id]) {
-    return QUESTION_SLUG_MAP[q.id];
-  }
-  const cleanTheme = (q.calm_theme || 'reflection')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return `q-${String(q.id).padStart(2, '0')}-${cleanTheme || 'item'}`;
+  return getAdaptiveQuestionSlug(q);
 }
 
 export type FlowStepItem =
@@ -49,9 +48,15 @@ interface QuietReflectionProps {
   questions: ItemBankQuestion[];
   activeFlow: StudioFlow;
   responses: Record<number, number>;
+  dynamicQuestionIds?: number[];
+  onChangeDynamicQuestionIds?: (nextIds: number[]) => void;
+  userContext?: UserContextProfile;
   currentQIdx: number;
   currentStepSlug: string;
   reflectPart: 'questions' | 'moments';
+  activePaletteIndex: number;
+  onSelectPalette: (paletteIndex: number) => void;
+  onToggleAtmospherePopover?: () => void;
   onSelectAnswer: (qId: number, val: number, nextQIdxOverride?: number) => void;
   onSetCurrentQIdx: (idx: number) => void;
   onNavigateStepSlug: (slug: string, pushHistory?: boolean) => void;
@@ -61,11 +66,16 @@ interface QuietReflectionProps {
 
 export const QuietReflection: React.FC<QuietReflectionProps> = ({
   questions,
-  activeFlow,
   responses,
+  dynamicQuestionIds,
+  onChangeDynamicQuestionIds,
+  userContext = DEFAULT_USER_CONTEXT,
   currentQIdx,
   currentStepSlug,
   reflectPart,
+  activePaletteIndex,
+  onSelectPalette,
+  onToggleAtmospherePopover,
   onSelectAnswer,
   onSetCurrentQIdx,
   onNavigateStepSlug,
@@ -73,35 +83,66 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   onFinishToPortrait,
 }) => {
   const [momentsDirectSequence, setMomentsDirectSequence] = useState<boolean>(false);
+  const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
   const autoAdvanceRef = useRef<number | null>(null);
 
-  // Present all 15 questions (12 core + 3 everyday habit moments) seamlessly
+  const effectivePool = useMemo(() => {
+    return questions && questions.length >= 20 ? questions : ADAPTIVE_POOL_120;
+  }, [questions]);
+
+  const [internalDynamicIds, setInternalDynamicIds] = useState<number[]>(() =>
+    dynamicQuestionIds && dynamicQuestionIds.length > 0 ? dynamicQuestionIds : [1]
+  );
+
+  const committedIds =
+    dynamicQuestionIds && dynamicQuestionIds.length > 0
+      ? dynamicQuestionIds
+      : internalDynamicIds;
+
+  const updateCommittedIds = useCallback(
+    (nextIds: number[]) => {
+      setInternalDynamicIds(nextIds);
+      if (onChangeDynamicQuestionIds) {
+        onChangeDynamicQuestionIds(nextIds);
+      }
+    },
+    [onChangeDynamicQuestionIds]
+  );
+
+  // Build the 15-question adaptive path from committedIds + real-time CAT lookahead
   const flowQuestions = useMemo(() => {
     const byId = new Map<number, ItemBankQuestion>();
-    questions.forEach((q) => byId.set(Number(q.id), q));
+    effectivePool.forEach((q) => byId.set(Number(q.id), q));
 
-    let ids: number[] = [];
-    if (activeFlow && Array.isArray(activeFlow.question_ids) && activeFlow.question_ids.length > 0) {
-      ids = [...activeFlow.question_ids];
-    } else {
-      ids = questions.map((q) => q.id);
-    }
+    const currentTel = AuraMicroGamesBridge.getState();
+    const full15Ids = buildDynamicAdaptivePath({
+      pool: effectivePool,
+      committedIds,
+      responses,
+      telemetry: currentTel,
+      targetLength: 15,
+    });
 
-    for (const bonusId of [13, 14, 15]) {
-      if (!ids.includes(bonusId) && byId.has(bonusId)) {
-        ids.push(bonusId);
+    // Ensure if currentStepSlug explicitly refers to any question in the 120-item pool, it is present
+    if (currentStepSlug && currentStepSlug.startsWith('q-')) {
+      const targetQ = findQuestionBySlugOrId(effectivePool, currentStepSlug);
+      if (targetQ && !full15Ids.includes(targetQ.id)) {
+        const replaceIdx = Math.max(0, Math.min(currentQIdx, 14));
+        full15Ids[replaceIdx] = targetQ.id;
       }
     }
 
-    const resolved = ids
+    const resolved = full15Ids
       .map((id) => byId.get(Number(id)))
       .filter((q): q is ItemBankQuestion => Boolean(q));
 
-    return resolved.length > 0 ? resolved : questions.slice(0, 15);
-  }, [questions, activeFlow]);
+    return resolved.length > 0 ? resolved : effectivePool.slice(0, 15);
+  }, [effectivePool, committedIds, responses, currentStepSlug, currentQIdx]);
 
-  // Unified end-to-end interwoven sequence:
-  // Q1..Q4 -> Mind Moment 1 (Still Water) -> Q5..Q8 -> Mind Moment 2 (Night Sky) -> Q9..Q15 -> Mind Moment 3 (Inner Canvas)
+  // Unified end-to-end interwoven sequence (18 steps total):
+  // Q1..Q4 (dynamic) -> Mind Moment 1 (Still Water, Step 05/18) ->
+  // Q5..Q8 (dynamic) -> Mind Moment 2 (Night Sky, Step 10/18) ->
+  // Q9..Q15 (dynamic) -> Mind Moment 3 (Inner Canvas, Step 18/18)
   const interwovenSteps = useMemo<FlowStepItem[]>(() => {
     const steps: FlowStepItem[] = [];
     flowQuestions.forEach((q, qIdx) => {
@@ -163,6 +204,19 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   const activeStep = interwovenSteps[activeStepIndex] || interwovenSteps[0];
   const totalStepsCount = interwovenSteps.length;
 
+  // Harmonize palette automatically when entering a Mind Moment
+  useEffect(() => {
+    if (activeStep?.kind === 'moment') {
+      if (activeStep.momentIndex === 0) {
+        onSelectPalette(3); // Forest Breath for Still Water
+      } else if (activeStep.momentIndex === 1) {
+        onSelectPalette(4); // Cosmic Stillness for Night Sky
+      } else if (activeStep.momentIndex === 2) {
+        onSelectPalette(2); // Golden Hour for Inner Canvas
+      }
+    }
+  }, [activeStep?.kind, activeStep?.kind === 'moment' ? activeStep.momentIndex : -1, onSelectPalette]);
+
   useEffect(() => {
     return () => {
       if (autoAdvanceRef.current !== null) {
@@ -172,13 +226,14 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   }, []);
 
   const goToStepIndex = useCallback(
-    (nextStepIdx: number, pushHistory = true) => {
+    (nextStepIdx: number, pushHistory = true, overrideInterwoven?: FlowStepItem[]) => {
+      const stepsList = overrideInterwoven || interwovenSteps;
       if (nextStepIdx < 0) return;
-      if (nextStepIdx >= interwovenSteps.length) {
+      if (nextStepIdx >= stepsList.length) {
         onFinishToPortrait();
         return;
       }
-      const target = interwovenSteps[nextStepIdx];
+      const target = stepsList[nextStepIdx];
       if (target.kind === 'question') {
         setMomentsDirectSequence(false);
         onSetCurrentQIdx(target.questionIndex);
@@ -210,14 +265,84 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
         autoAdvanceRef.current = null;
       }
 
+      // Smoothly drift within the active luminance family so contrast stays 100% rock-solid during fast auto-advance
+      const currentPal = AURA_PALETTES[activePaletteIndex] || AURA_PALETTES[0];
+      const samePolarityIndices = currentPal.isDark ? [1, 4] : [0, 2, 3];
+      const nextPaletteIdx =
+        samePolarityIndices[(qId + val) % samePolarityIndices.length];
+      onSelectPalette(nextPaletteIdx);
+
+      // Compute the dynamically branched next question based on this answer!
+      const nextResponses = { ...responses, [qId]: val };
+      const qStepIdx =
+        activeStep.kind === 'question' ? activeStep.questionIndex : currentQIdx;
+
+      // Truncate dynamicQuestionIds up to current question step (in case user pressed <- Back and changed an answer)
+      const prefixIds = flowQuestions
+        .slice(0, qStepIdx + 1)
+        .map((q, idx) => (idx === qStepIdx ? qId : q.id));
+
+      let nextCommitted = [...prefixIds];
+      if (nextCommitted.length < 15) {
+        const sel = selectNextAdaptiveQuestionClient({
+          pool: effectivePool,
+          answeredIds: nextCommitted,
+          responses: nextResponses,
+          telemetry: AuraMicroGamesBridge.getState(),
+        });
+        if (sel.nextItem && !nextCommitted.includes(sel.nextItem.id)) {
+          nextCommitted.push(sel.nextItem.id);
+        }
+      }
+      updateCommittedIds(nextCommitted);
       onSelectAnswer(qId, val);
+      setIsFadingOut(true);
+
+      // Build updated step target so auto-advance lands on the newly selected adaptive question slug (or Mind Moment)
+      const nextStepIdx = activeStepIndex + 1;
+      const isNextStepMoment =
+        (qStepIdx === 3 && nextStepIdx === 4) ||
+        (qStepIdx === 7 && nextStepIdx === 9) ||
+        qStepIdx === 14;
+
+      const nextSelectedQuestionId = nextCommitted[qStepIdx + 1];
+      const nextSelectedQuestion = nextSelectedQuestionId
+        ? effectivePool.find((q) => q.id === nextSelectedQuestionId)
+        : undefined;
 
       autoAdvanceRef.current = window.setTimeout(() => {
         autoAdvanceRef.current = null;
-        goToStepIndex(activeStepIndex + 1, true);
-      }, 190);
+        setIsFadingOut(false);
+        if (isNextStepMoment) {
+          goToStepIndex(nextStepIdx, true);
+        } else if (nextSelectedQuestion) {
+          setMomentsDirectSequence(false);
+          onSetCurrentQIdx(qStepIdx + 1);
+          if (reflectPart !== 'questions') {
+            onSwitchReflectPart('questions');
+          }
+          onNavigateStepSlug(getQuestionSlug(nextSelectedQuestion), true);
+        } else {
+          goToStepIndex(nextStepIdx, true);
+        }
+      }, 210);
     },
-    [activeStepIndex, goToStepIndex, onSelectAnswer]
+    [
+      activeStep,
+      activeStepIndex,
+      currentQIdx,
+      effectivePool,
+      flowQuestions,
+      goToStepIndex,
+      onNavigateStepSlug,
+      onSelectAnswer,
+      onSelectPalette,
+      onSetCurrentQIdx,
+      onSwitchReflectPart,
+      reflectPart,
+      responses,
+      updateCommittedIds,
+    ]
   );
 
   const handlePrev = useCallback(() => {
@@ -225,6 +350,7 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
     }
+    setIsFadingOut(false);
     if (activeStepIndex > 0) {
       goToStepIndex(activeStepIndex - 1, true);
     }
@@ -235,6 +361,7 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       window.clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
     }
+    setIsFadingOut(false);
     if (activeStepIndex < totalStepsCount - 1) {
       goToStepIndex(activeStepIndex + 1, true);
     } else {
@@ -299,6 +426,29 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
         return;
       }
 
+      // Re-select the next question after Still Water (qIdx 4) or Night Sky (qIdx 8) using the fresh Mind Moment telemetry!
+      if (momentIdx === 0 || momentIdx === 1) {
+        const answeredCountBeforeMoment = momentIdx === 0 ? 4 : 8;
+        const prefixIds = flowQuestions
+          .slice(0, answeredCountBeforeMoment)
+          .map((q) => q.id);
+        const sel = selectNextAdaptiveQuestionClient({
+          pool: effectivePool,
+          answeredIds: prefixIds,
+          responses,
+          telemetry: latestTel,
+        });
+        if (sel.nextItem) {
+          const updatedIds = [...prefixIds, sel.nextItem.id];
+          updateCommittedIds(updatedIds);
+          setMomentsDirectSequence(false);
+          onSetCurrentQIdx(answeredCountBeforeMoment);
+          onSwitchReflectPart('questions');
+          onNavigateStepSlug(getQuestionSlug(sel.nextItem), true);
+          return;
+        }
+      }
+
       if (activeStepIndex < totalStepsCount - 1) {
         goToStepIndex(activeStepIndex + 1, true);
       } else {
@@ -307,11 +457,17 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
     },
     [
       activeStepIndex,
+      effectivePool,
+      flowQuestions,
       goToStepIndex,
       momentsDirectSequence,
       onFinishToPortrait,
       onNavigateStepSlug,
+      onSetCurrentQIdx,
+      onSwitchReflectPart,
+      responses,
       totalStepsCount,
+      updateCommittedIds,
     ]
   );
 
@@ -326,6 +482,31 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       ? responses[currentQuestion.id]
       : undefined;
 
+  const activePalette =
+    AURA_PALETTES[activePaletteIndex] || AURA_PALETTES[0];
+
+  // Apply LLM Contextual Morphing & DIF De-Biasing to current question & Likert choices
+  const morphed = useMemo(() => {
+    if (!currentQuestion) {
+      return {
+        morphedText: '',
+        morphedTheme: 'Quiet Reflection',
+        difNote: '',
+        likertLabels: LIKERT_OPTIONS,
+        isMorphed: false,
+        contextBadge: 'EN',
+      };
+    }
+    return morphQuestionForContext(currentQuestion, userContext);
+  }, [currentQuestion, userContext]);
+
+  const isBranchedItem =
+    currentQuestion &&
+    (currentQuestion.node_tier === 'branch_probe' ||
+      currentQuestion.node_tier === 'deep_resolution' ||
+      currentQuestion.node_tier === 'everyday_moment' ||
+      currentQuestion.id > 12);
+
   return (
     <section id="view-test" className="view-section active typeform-stage-section">
       {/* 2px Continuous Top Viewport Progress Line */}
@@ -337,7 +518,7 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
         />
       </div>
 
-      {/* Ultra-Minimal 44px Top Bar */}
+      {/* Ultra-Minimal 32px Top Micro-Bar */}
       <div className="typeform-minimal-topbar">
         <div className="typeform-topbar-left">
           {activeStepIndex > 0 ? (
@@ -351,9 +532,48 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
               ← Back
             </button>
           ) : (
-            <span className="typeform-topbar-brand">Aura</span>
+            <span className="typeform-topbar-brand serif">aura</span>
           )}
         </div>
+
+        {/* Center Live Aura Resonance & Context Lens Pill (Tappable to open Atmosphere & Context Controls) */}
+        <button
+          id="aura-mood-pill"
+          type="button"
+          onClick={() => {
+            if (onToggleAtmospherePopover) {
+              onToggleAtmospherePopover();
+            } else {
+              onSelectPalette((activePaletteIndex + 1) % AURA_PALETTES.length);
+            }
+          }}
+          className="aura-resonance-micro-pill"
+          title="Tap to tune Aura atmosphere & life context lens"
+        >
+          <span className="aura-swatch-cluster">
+            {activePalette.colors.slice(1, 4).map((hex, i) => (
+              <span
+                key={i}
+                className="aura-micro-swatch"
+                style={{ backgroundColor: hex }}
+              />
+            ))}
+          </span>
+          <span id="current-mood-badge">{activePalette.name}</span>
+          {morphed.isMorphed && (
+            <span
+              className="mono"
+              style={{
+                fontSize: '9.5px',
+                opacity: 0.82,
+                paddingLeft: '4px',
+                borderLeft: '1px solid var(--glass-border)',
+              }}
+            >
+              {userContext.language.toUpperCase()}
+            </span>
+          )}
+        </button>
 
         <div className="typeform-topbar-right">
           <span id="q-counter" className="typeform-topbar-counter mono">
@@ -376,31 +596,69 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
          ==================================================================== */}
       {activeStep.kind === 'question' && currentQuestion && (
         <div id="reflect-part-questions" className="typeform-canvas-wrap">
-          <div className="typeform-question-stage">
-            <div id="q-aspect-badge" className="typeform-eyebrow-theme">
-              {currentQuestion.calm_theme || 'Quiet Reflection'}
+          <div
+            className={`typeform-question-stage quiz-content-transition ${
+              isFadingOut ? 'quiz-fade-out' : ''
+            }`}
+          >
+            <div
+              id="q-aspect-badge"
+              className="typeform-eyebrow-theme"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              <span>{morphed.morphedTheme || 'Quiet Reflection'}</span>
+              <span
+                id="q-adaptive-tree-pill"
+                style={{
+                  color: 'var(--accent)',
+                  letterSpacing: '0.06em',
+                  fontSize: '10.5px',
+                  fontWeight: 600,
+                }}
+              >
+                {isBranchedItem
+                  ? '· ✦ Branched to you'
+                  : `· Adaptive (${effectivePool.length})`}
+              </span>
             </div>
 
             <h2 id="q-prompt-text" className="serif typeform-prompt-heading">
-              {currentQuestion.text}
+              {morphed.morphedText}
             </h2>
 
             <div id="likert-choices" className="choice-stack">
-              {LIKERT_OPTIONS.map((opt) => {
+              {morphed.likertLabels.map((opt) => {
                 const isSelected =
                   curVal !== undefined && curVal !== null && Number(curVal) === opt.val;
+                const optionPalette =
+                  AURA_PALETTES[
+                    (currentQuestion.id + opt.val - 2) % AURA_PALETTES.length
+                  ];
                 return (
                   <button
                     key={opt.val}
                     type="button"
                     onClick={() => handleChoiceClick(currentQuestion.id, opt.val)}
-                    className={`choice-btn ${isSelected ? 'selected' : ''}`}
+                    className={`choice-btn glass-option ${isSelected ? 'selected' : ''}`}
                   >
                     <span className="typeform-choice-left">
                       <span className="typeform-num">{opt.val}</span>
                       <span className="typeform-choice-label">{opt.label}</span>
                     </span>
-                    {isSelected && <span className="typeform-check">✓</span>}
+                    <span className="choice-resonance-indicator">
+                      <span
+                        className="choice-resonance-dot"
+                        style={{ backgroundColor: optionPalette.colors[1] }}
+                      />
+                      {isSelected && <span className="typeform-check">✓</span>}
+                    </span>
                   </button>
                 );
               })}
