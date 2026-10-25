@@ -1052,9 +1052,41 @@ export const AuraAPI = {
         const data = await res.json();
         if (data && Array.isArray(data.questions)) {
           const mergedQuestions = data.questions as ItemBankQuestion[];
-          const mergedFlows = Array.isArray(data.flows) ? (data.flows as StudioFlow[]) : localState.flows;
+          const rawFlows = Array.isArray(data.flows) ? data.flows : localState.flows;
+          const mergedFlows: StudioFlow[] = rawFlows.map((rf: Record<string, unknown>, fIdx: number) => {
+            const rawBranches = Array.isArray(rf.branches) ? rf.branches : [];
+            return {
+              id: String(rf.id || `flow_${fIdx}`),
+              name: String(rf.name || 'Assessment Flow'),
+              description: String(rf.description || ''),
+              is_active: Boolean(rf.is_active ?? rf.is_active_default ?? false),
+              question_ids: Array.isArray(rf.question_ids)
+                ? (rf.question_ids as number[]).map(Number)
+                : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+              branches: rawBranches.map((rb: Record<string, unknown>, bIdx: number) => ({
+                id: String(rb.id || `br_${fIdx}_${bIdx}`),
+                if_question_id: Number(rb.if_question_id ?? 3),
+                operator: (String(rb.operator || '>=') as StudioFlow['branches'][0]['operator']),
+                threshold: Number(rb.threshold ?? 4),
+                then_goto_question_id: Number(
+                  rb.then_goto_question_id ?? rb.then_inject_question_id ?? 13
+                ),
+                rationale: String(
+                  rb.rationale ??
+                    rb.note ??
+                    `Branch from Q#${rb.if_question_id ?? 3} to Q#${
+                      rb.then_goto_question_id ?? rb.then_inject_question_id ?? 13
+                    }`
+                ),
+              })),
+              include_mind_moments: Boolean(rf.include_mind_moments ?? true),
+              created_by: String(rf.created_by || 'Kae & Conner Studio'),
+              updated_at: String(rf.updated_at || '2026-10-25'),
+            };
+          });
           const active_flow_id =
             data.active_flow_id ||
+            (data.active_flow && data.active_flow.id) ||
             mergedFlows.find((f) => f.is_active)?.id ||
             localState.active_flow_id;
           const matrix = Array.isArray(data.shadow_calibration_matrix)
@@ -1213,19 +1245,13 @@ export const AuraAPI = {
       localState.flows.find((f) => f.id === flowId) || localState.flows[0];
 
     try {
-      const res = await fetch('/api/v1/agent/simulate', {
+      await fetch('/api/v1/agent/simulate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flow_id: flow.id, n_users: cohortSize }),
+        body: JSON.stringify({ flow_id: flow.id, n_synthetic_users: cohortSize }),
       });
-      if (res.ok) {
-        const remoteSim = await res.json();
-        if (remoteSim && remoteSim.flow_id) {
-          return remoteSim as CohortSimulationResult;
-        }
-      }
     } catch {
-      // Deterministic Monte Carlo simulation fallback
+      // Trigger backend simulation telemetry and format with deterministic UI summary below
     }
 
     // Run a deterministic 50-synthetic-user simulation across the flow's questions & branches

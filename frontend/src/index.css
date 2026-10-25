@@ -190,7 +190,7 @@ body {
   z-index: 60;
   width: calc(100% - 28px);
   max-width: 460px;
-  background: rgba(15, 17, 26, 0.92);
+  background: rgba(11, 13, 21, 0.985);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.1);
