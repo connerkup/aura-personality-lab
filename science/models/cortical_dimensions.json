@@ -1,0 +1,86 @@
+{
+  "schema_version": "2.0.0",
+  "framework_name": "Aura Neuro-Computational & Cybernetic Trait Architecture",
+  "description": "Separates 4D Cortical Inference Architecture (decade-stable cognitive priors) from Neuromodulatory Gain States (season/mood-sensitive) and DeYoung's 10 Aspects.",
+  "observer_manifold": {
+    "dimensionality": 4,
+    "attractor_basins": 16,
+    "references": [
+      "Tavares et al. (2015) Neuron - Hippocampal 2D Power x Affiliation Social Map",
+      "Thornton & Tamir (2017, 2020) PNAS - 3D/4D Cortical Mentalizing Space (mPFC/TPJ)",
+      "DeYoung (2015) Cybernetic Big Five Theory (CB5T)"
+    ]
+  },
+  "domains": [
+    {
+      "id": "O",
+      "name": "Prior vs. Sensory Precision",
+      "legacy_big_five": "Openness / Intellect",
+      "cortical_layer": "cortical_invariant",
+      "neural_substrate": "Thalamocortical top-down prior precision vs. bottom-up sensory prediction error gain (ACh / NE ratio)",
+      "mbti_pole_low": { "code": "S", "label": "High Sensory Precision (S)", "mechanism": "Weights bottom-up concrete sensory evidence & verifiable state data" },
+      "mbti_pole_high": { "code": "N", "label": "High Generative Prior (N)", "mechanism": "Weights top-down abstract generative models, cross-domain patterns & possibilities" },
+      "mood_susceptibility": 0.08,
+      "aspects": [
+        { "id": "O_intellect", "name": "Abstract Systemizing (Intellect)", "substrate": "Dorsolateral PFC working-memory abstraction & causal modeling", "weight": 0.52 },
+        { "id": "O_openness", "name": "Perceptual & Aesthetic Depth", "substrate": "Default Mode Network (DMN) semantic spreading & perceptual absorption", "weight": 0.48 }
+      ]
+    },
+    {
+      "id": "C",
+      "name": "Attractor Depth vs. Exploration Temperature",
+      "legacy_big_five": "Conscientiousness",
+      "cortical_layer": "hybrid_gated",
+      "neural_substrate": "Striatal D1/D2 action gating & dlPFC goal maintenance vs. high-temperature state-space foraging",
+      "mbti_pole_low": { "code": "P", "label": "High Exploration Temp (P)", "mechanism": "Maintains shallow attractor basins for rapid pivoting, novelty foraging & open options" },
+      "mbti_pole_high": { "code": "J", "label": "Deep Attractor Locking (J)", "mechanism": "Deepens goal-state attractors to minimize temporal entropy and close open loops" },
+      "mood_susceptibility": 0.42,
+      "aspects": [
+        { "id": "C_industriousness", "name": "Goal-Locked Drive (Industriousness)", "substrate": "Striatal-prefrontal effort mobilization (highly sensitive to Salience vs. Routine gating)", "weight": 0.55 },
+        { "id": "C_orderliness", "name": "Entropy Suppression (Orderliness)", "substrate": "Orbitofrontal/basal ganglia regularity & environmental structure preference", "weight": 0.45 }
+      ]
+    },
+    {
+      "id": "E",
+      "name": "External Foraging vs. Internal Simulation",
+      "legacy_big_five": "Extraversion",
+      "cortical_layer": "neuromodulatory_gain",
+      "neural_substrate": "Mesolimbic phasic/tonic Dopamine (VTA -> Nucleus Accumbens) reward-prediction-error gain",
+      "mbti_pole_low": { "code": "I", "label": "Internal World Simulation (I)", "mechanism": "Optimizes cortical arousal via low-noise internal simulation and selective 1-on-1 depth" },
+      "mbti_pole_high": { "code": "E", "label": "External Reward Foraging (E)", "mechanism": "Up-regulates dopaminergic gain through high-bandwidth external social & environmental foraging" },
+      "mood_susceptibility": 0.48,
+      "aspects": [
+        { "id": "E_enthusiasm", "name": "Affiliative Reward Gain (Enthusiasm)", "substrate": "Ventral striatal + endogenous opioid social warmth & positive affect resonance", "weight": 0.50 },
+        { "id": "E_assertiveness", "name": "Agency & Social Impact (Assertiveness)", "substrate": "Dopaminergic incentive salience & hippocampal Power-axis navigation", "weight": 0.50 }
+      ]
+    },
+    {
+      "id": "A",
+      "name": "Allostatic Coupling vs. Decoupled Logic",
+      "legacy_big_five": "Agreeableness",
+      "cortical_layer": "cortical_invariant",
+      "neural_substrate": "Anterior Insula / ACC / Oxytocin allostatic coupling vs. decoupled algorithmic policy optimization",
+      "mbti_pole_low": { "code": "T", "label": "Decoupled Systemic Logic (T)", "mechanism": "Decouples policy evaluation from interpersonal affect to optimize objective truth & game-theoretic fairness" },
+      "mbti_pole_high": { "code": "F", "label": "Allostatic Social Coupling (F)", "mechanism": "Couples other agents' homeostatic/emotional prediction errors directly into one's own objective function" },
+      "mood_susceptibility": 0.18,
+      "aspects": [
+        { "id": "A_compassion", "name": "Allostatic Resonance (Compassion)", "substrate": "Anterior insula & mPFC mirror-affective coupling", "weight": 0.54 },
+        { "id": "A_politeness", "name": "Normative Friction Suppression (Politeness)", "substrate": "Ventromedial PFC inhibition of antagonistic social impulses", "weight": 0.46 }
+      ]
+    },
+    {
+      "id": "N",
+      "name": "Threat & Uncertainty Error Gain",
+      "legacy_big_five": "Neuroticism / Negative Emotionality",
+      "cortical_layer": "neuromodulatory_gain",
+      "neural_substrate": "Serotonergic dorsal raphe tone + Amygdala-Habenula-Insula negative prediction-error gain",
+      "mbti_pole_low": { "code": "A", "label": "Damped Error Gain (-A)", "mechanism": "High serotonergic buffer; absorbs negative prediction errors without global state destabilization" },
+      "mbti_pole_high": { "code": "T", "label": "High Vigilance Gain (-T)", "mechanism": "High precision on negative prediction errors, threat forecasting & error-corrective vigilance" },
+      "mood_susceptibility": 0.65,
+      "aspects": [
+        { "id": "N_withdrawal", "name": "Uncertainty Vigilance (Withdrawal)", "substrate": "Hippocampal-septal behavioral inhibition system (BIS) & anticipatory caution", "weight": 0.50 },
+        { "id": "N_volatility", "name": "Affective State Gain (Volatility)", "substrate": "Amygdala-periaqueductal active defense reactivity to blocked goals", "weight": 0.50 }
+      ]
+    }
+  ]
+}

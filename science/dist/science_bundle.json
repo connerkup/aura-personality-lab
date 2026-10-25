@@ -1,0 +1,1597 @@
+{
+  "cortical_schema": {
+    "schema_version": "2.0.0",
+    "framework_name": "Aura Neuro-Computational & Cybernetic Trait Architecture",
+    "description": "Separates 4D Cortical Inference Architecture (decade-stable cognitive priors) from Neuromodulatory Gain States (season/mood-sensitive) and DeYoung's 10 Aspects.",
+    "observer_manifold": {
+      "dimensionality": 4,
+      "attractor_basins": 16,
+      "references": [
+        "Tavares et al. (2015) Neuron - Hippocampal 2D Power x Affiliation Social Map",
+        "Thornton & Tamir (2017, 2020) PNAS - 3D/4D Cortical Mentalizing Space (mPFC/TPJ)",
+        "DeYoung (2015) Cybernetic Big Five Theory (CB5T)"
+      ]
+    },
+    "domains": [
+      {
+        "id": "O",
+        "name": "Prior vs. Sensory Precision",
+        "legacy_big_five": "Openness / Intellect",
+        "cortical_layer": "cortical_invariant",
+        "neural_substrate": "Thalamocortical top-down prior precision vs. bottom-up sensory prediction error gain (ACh / NE ratio)",
+        "mbti_pole_low": {
+          "code": "S",
+          "label": "High Sensory Precision (S)",
+          "mechanism": "Weights bottom-up concrete sensory evidence & verifiable state data"
+        },
+        "mbti_pole_high": {
+          "code": "N",
+          "label": "High Generative Prior (N)",
+          "mechanism": "Weights top-down abstract generative models, cross-domain patterns & possibilities"
+        },
+        "mood_susceptibility": 0.08,
+        "aspects": [
+          {
+            "id": "O_intellect",
+            "name": "Abstract Systemizing (Intellect)",
+            "substrate": "Dorsolateral PFC working-memory abstraction & causal modeling",
+            "weight": 0.52
+          },
+          {
+            "id": "O_openness",
+            "name": "Perceptual & Aesthetic Depth",
+            "substrate": "Default Mode Network (DMN) semantic spreading & perceptual absorption",
+            "weight": 0.48
+          }
+        ]
+      },
+      {
+        "id": "C",
+        "name": "Attractor Depth vs. Exploration Temperature",
+        "legacy_big_five": "Conscientiousness",
+        "cortical_layer": "hybrid_gated",
+        "neural_substrate": "Striatal D1/D2 action gating & dlPFC goal maintenance vs. high-temperature state-space foraging",
+        "mbti_pole_low": {
+          "code": "P",
+          "label": "High Exploration Temp (P)",
+          "mechanism": "Maintains shallow attractor basins for rapid pivoting, novelty foraging & open options"
+        },
+        "mbti_pole_high": {
+          "code": "J",
+          "label": "Deep Attractor Locking (J)",
+          "mechanism": "Deepens goal-state attractors to minimize temporal entropy and close open loops"
+        },
+        "mood_susceptibility": 0.42,
+        "aspects": [
+          {
+            "id": "C_industriousness",
+            "name": "Goal-Locked Drive (Industriousness)",
+            "substrate": "Striatal-prefrontal effort mobilization (highly sensitive to Salience vs. Routine gating)",
+            "weight": 0.55
+          },
+          {
+            "id": "C_orderliness",
+            "name": "Entropy Suppression (Orderliness)",
+            "substrate": "Orbitofrontal/basal ganglia regularity & environmental structure preference",
+            "weight": 0.45
+          }
+        ]
+      },
+      {
+        "id": "E",
+        "name": "External Foraging vs. Internal Simulation",
+        "legacy_big_five": "Extraversion",
+        "cortical_layer": "neuromodulatory_gain",
+        "neural_substrate": "Mesolimbic phasic/tonic Dopamine (VTA -> Nucleus Accumbens) reward-prediction-error gain",
+        "mbti_pole_low": {
+          "code": "I",
+          "label": "Internal World Simulation (I)",
+          "mechanism": "Optimizes cortical arousal via low-noise internal simulation and selective 1-on-1 depth"
+        },
+        "mbti_pole_high": {
+          "code": "E",
+          "label": "External Reward Foraging (E)",
+          "mechanism": "Up-regulates dopaminergic gain through high-bandwidth external social & environmental foraging"
+        },
+        "mood_susceptibility": 0.48,
+        "aspects": [
+          {
+            "id": "E_enthusiasm",
+            "name": "Affiliative Reward Gain (Enthusiasm)",
+            "substrate": "Ventral striatal + endogenous opioid social warmth & positive affect resonance",
+            "weight": 0.5
+          },
+          {
+            "id": "E_assertiveness",
+            "name": "Agency & Social Impact (Assertiveness)",
+            "substrate": "Dopaminergic incentive salience & hippocampal Power-axis navigation",
+            "weight": 0.5
+          }
+        ]
+      },
+      {
+        "id": "A",
+        "name": "Allostatic Coupling vs. Decoupled Logic",
+        "legacy_big_five": "Agreeableness",
+        "cortical_layer": "cortical_invariant",
+        "neural_substrate": "Anterior Insula / ACC / Oxytocin allostatic coupling vs. decoupled algorithmic policy optimization",
+        "mbti_pole_low": {
+          "code": "T",
+          "label": "Decoupled Systemic Logic (T)",
+          "mechanism": "Decouples policy evaluation from interpersonal affect to optimize objective truth & game-theoretic fairness"
+        },
+        "mbti_pole_high": {
+          "code": "F",
+          "label": "Allostatic Social Coupling (F)",
+          "mechanism": "Couples other agents' homeostatic/emotional prediction errors directly into one's own objective function"
+        },
+        "mood_susceptibility": 0.18,
+        "aspects": [
+          {
+            "id": "A_compassion",
+            "name": "Allostatic Resonance (Compassion)",
+            "substrate": "Anterior insula & mPFC mirror-affective coupling",
+            "weight": 0.54
+          },
+          {
+            "id": "A_politeness",
+            "name": "Normative Friction Suppression (Politeness)",
+            "substrate": "Ventromedial PFC inhibition of antagonistic social impulses",
+            "weight": 0.46
+          }
+        ]
+      },
+      {
+        "id": "N",
+        "name": "Threat & Uncertainty Error Gain",
+        "legacy_big_five": "Neuroticism / Negative Emotionality",
+        "cortical_layer": "neuromodulatory_gain",
+        "neural_substrate": "Serotonergic dorsal raphe tone + Amygdala-Habenula-Insula negative prediction-error gain",
+        "mbti_pole_low": {
+          "code": "A",
+          "label": "Damped Error Gain (-A)",
+          "mechanism": "High serotonergic buffer; absorbs negative prediction errors without global state destabilization"
+        },
+        "mbti_pole_high": {
+          "code": "T",
+          "label": "High Vigilance Gain (-T)",
+          "mechanism": "High precision on negative prediction errors, threat forecasting & error-corrective vigilance"
+        },
+        "mood_susceptibility": 0.65,
+        "aspects": [
+          {
+            "id": "N_withdrawal",
+            "name": "Uncertainty Vigilance (Withdrawal)",
+            "substrate": "Hippocampal-septal behavioral inhibition system (BIS) & anticipatory caution",
+            "weight": 0.5
+          },
+          {
+            "id": "N_volatility",
+            "name": "Affective State Gain (Volatility)",
+            "substrate": "Amygdala-periaqueductal active defense reactivity to blocked goals",
+            "weight": 0.5
+          }
+        ]
+      }
+    ]
+  },
+  "masks_schema": {
+    "schema_version": "3.0.0",
+    "description": "Neurodevelopmental Modulatory Masks (B_wiring) with Blind Epistemic Double-Dissociation Signatures and calm, non-clinical user translations.",
+    "masks": [
+      {
+        "id": "adhd_dopamine_forager",
+        "name": "Interest-Based Nervous System (Dopamine-Foraging / Salience-Gated)",
+        "short_label": "Spark-Driven Rhythm",
+        "calm_title": "Spark-Driven Rhythm",
+        "calm_Badge": "Lit by Curiosity",
+        "calm_summary": "Your focus is powered by meaning, novelty, and genuine interest rather than routine obligation. Everyday checklists can feel surprisingly heavy, yet when a question or project truly captures your heart, your depth of focus is extraordinary.",
+        "calm_reframe": "Most personality tests mistake a dislike of routine errands for 'low discipline.' Once we separate routine chores from curiosity-driven work, your true follow-through is strong and deeply devoted.",
+        "badge": "Salience-Gated Mask",
+        "neural_mechanism": "Lower tonic prefrontal/striatal dopamine baseline paired with high-amplitude phasic bursts under novelty, urgency, or deep intrinsic interest. Action gating is salience-coupled rather than routine-coupled.",
+        "prior_offsets": {
+          "O": 14.0,
+          "C": -22.0,
+          "E": 6.0,
+          "A": 0.0,
+          "N": 10.0
+        },
+        "gating_reinterpretation": {
+          "salience_vs_routine_split": 34.0,
+          "sensory_overload_social_penalty": 4.0,
+          "perceptual_gain_to_volatility_confound": 8.0
+        },
+        "diagnostic_note": "Standard tests misread low routine chore completion (-22% C offset) as 'low conscientiousness.' De-confounding reveals high Salience-Locked Hyperfocus (+34% drive on high-interest problems)."
+      },
+      {
+        "id": "monotropic_sensory_precision",
+        "name": "Monotropic / High-Sensory-Precision (Deep-Tunnel Systemizer)",
+        "short_label": "Deep-Current Rhythm",
+        "calm_title": "Deep-Current Rhythm",
+        "calm_Badge": "Built for Depth",
+        "calm_summary": "You experience the world in high definition. Busy, overlapping rooms drain your energy quickly\u2014not because you don't care about people, but because your mind naturally tunes in deeply to one conversation or idea at a time.",
+        "calm_reframe": "Traditional tests often confuse crowd fatigue with being 'distant.' In quiet, one-on-one spaces where you don't have to filter out background noise, your warmth and loyalty shine clearly.",
+        "badge": "High Sensory Precision",
+        "neural_mechanism": "Elevated bottom-up thalamocortical sensory precision (pi_sensory) and deep, narrow attention tunnels (Monotropism). High-entropy social environments trigger sensory saturation rather than social apathy.",
+        "prior_offsets": {
+          "O": 8.0,
+          "C": 10.0,
+          "E": -24.0,
+          "A": -12.0,
+          "N": 11.0
+        },
+        "gating_reinterpretation": {
+          "salience_vs_routine_split": 18.0,
+          "sensory_overload_social_penalty": 28.0,
+          "perceptual_gain_to_volatility_confound": 12.0
+        },
+        "diagnostic_note": "Standard tests misclassify sensory crowd-fatigue (-24% E) and direct communication (-12% A) as 'aloofness.' Masking isolates genuine 1-on-1 allostatic loyalty (+28% de-confounded social capacity)."
+      },
+      {
+        "id": "audhd_dual_attractor",
+        "name": "Dual-Attractor Paradox (Novelty Foraging \u00d7 Sensory Sanctuary)",
+        "short_label": "Tides & Anchor Rhythm",
+        "calm_title": "Tides & Anchor Rhythm",
+        "calm_Badge": "Explorer & Sanctuary",
+        "calm_summary": "You hold a rare, creative balance inside you: one part of your mind craves fresh horizons, new ideas, and spontaneity, while another part needs a quiet, predictable sanctuary to feel grounded.",
+        "calm_reframe": "On ordinary personality tests, your love of novelty and your need for calm cancel each other out into a blurry middle score. Seeing both sides together honors how you actually move through the world.",
+        "badge": "Bimodal Paradox Mask",
+        "neural_mechanism": "Simultaneous prefrontal novelty foraging (dopamine-salience gating) and high bottom-up sensory precision requiring environmental predictability.",
+        "prior_offsets": {
+          "O": 16.0,
+          "C": -12.0,
+          "E": -14.0,
+          "A": -4.0,
+          "N": 14.0
+        },
+        "gating_reinterpretation": {
+          "salience_vs_routine_split": 36.0,
+          "sensory_overload_social_penalty": 22.0,
+          "perceptual_gain_to_volatility_confound": 14.0
+        },
+        "diagnostic_note": "Competing needs for novelty and order cancel out on linear tests. This mask unmasks bimodal high-entropy intellectual exploration paired with low-noise sensory protection."
+      },
+      {
+        "id": "hsp_high_gain_sensor",
+        "name": "High-Gain Perceptive & Allostatic Sensor (Deep Perceptual Resolution)",
+        "short_label": "Finely Tuned Rhythm",
+        "calm_title": "Finely Tuned Rhythm",
+        "calm_Badge": "High Perceptual Clarity",
+        "calm_summary": "You notice subtle shifts in tone, atmosphere, music, and emotion that others walk right past. Because you take in so much nuance, you feel both beauty and tension more vividly than most.",
+        "calm_reframe": "Most tests lump deep perceptiveness into 'worry' or 'stress.' Separating your natural attentiveness from stress shows a remarkably steady, perceptive core.",
+        "badge": "Amplified Signal Gain",
+        "neural_mechanism": "Amplified insula and mirror-network gain on subtle aesthetic, emotional, and interpersonal micro-signals.",
+        "prior_offsets": {
+          "O": 12.0,
+          "C": 4.0,
+          "E": -10.0,
+          "A": 14.0,
+          "N": 18.0
+        },
+        "gating_reinterpretation": {
+          "salience_vs_routine_split": 8.0,
+          "sensory_overload_social_penalty": 16.0,
+          "perceptual_gain_to_volatility_confound": 26.0
+        },
+        "diagnostic_note": "Standard Big Five tests dump high perceptual & empathic resolution straight into 'High Neuroticism' (+18% N offset). Masking separates signal sensitivity from emotional dysregulation."
+      },
+      {
+        "id": "canonical_allistic",
+        "name": "Canonical Allistic Baseline (Steady-Current Rhythm)",
+        "short_label": "Steady-Current Rhythm",
+        "calm_title": "Steady-Current Rhythm",
+        "calm_Badge": "Even Pace",
+        "calm_summary": "Your energy flows with a natural, even cadence across both everyday routines and shared social spaces. You don't have to fight steep internal friction just to switch between tasks or environments.",
+        "calm_reframe": "Because your baseline pace translates directly into everyday habits, your portrait reflects your preferences with very little hidden friction.",
+        "badge": "Unmasked Prior",
+        "neural_mechanism": "Standard tonic/phasic striatal dopamine gating with linear routine-to-action coupling and typical thalamocortical sensory attenuation.",
+        "prior_offsets": {
+          "O": 0.0,
+          "C": 0.0,
+          "E": 0.0,
+          "A": 0.0,
+          "N": 0.0
+        },
+        "gating_reinterpretation": {
+          "salience_vs_routine_split": 4.0,
+          "sensory_overload_social_penalty": 4.0,
+          "perceptual_gain_to_volatility_confound": 4.0
+        },
+        "diagnostic_note": "Standard normative comparison with minimal neurodevelopmental mask offset."
+      }
+    ]
+  },
+  "item_bank_schema": {
+    "schema_version": "4.0.0",
+    "description": "15-Item Epistemic Blind-Inference & Shadow Calibration Bank (12 Calibrated Anchors + 3 Disarming Sneaky Behavioral Micro-Questions). Written in calm, everyday human language for the user while encoding Double-Dissociation Context Splits, Psychophysical Reference Anchors, Compensatory Masking Cost, Differential Epoch State probes, and Empirical Shadow-Calibration Candidates for the Science Engine.",
+    "items": [
+      {
+        "id": 1,
+        "domain": "O",
+        "aspect": "Abstract Systemizing (Intellect)",
+        "layer": "cortical_invariant",
+        "probe_type": "cortical_prior",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 1.25,
+        "irt_a": 1.65,
+        "irt_b": -0.15,
+        "mood_halo_loading": 0.05,
+        "text": "When I\u2019m learning something new, I naturally look for the deeper pattern of how it all fits together before worrying about the small details.",
+        "calm_theme": "How you take in ideas"
+      },
+      {
+        "id": 2,
+        "domain": "O",
+        "aspect": "Perceptual & Aesthetic Depth",
+        "layer": "double_dissociation_valence",
+        "probe_type": "valence_signal_gain",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 1.2,
+        "irt_a": 1.55,
+        "irt_b": -0.2,
+        "mood_halo_loading": 0.08,
+        "text": "A small shift in the light in a room, a piece of music, or someone\u2019s tone of voice can stay with me for a long time.",
+        "calm_theme": "What you notice"
+      },
+      {
+        "id": 3,
+        "domain": "C",
+        "aspect": "Goal-Locked Drive (Industriousness)",
+        "layer": "double_dissociation_salience",
+        "probe_type": "salience_vs_routine_split",
+        "calibration_status": "calibrated_anchor",
+        "direction": -1,
+        "weight": 1.25,
+        "irt_a": 1.78,
+        "irt_b": 0.05,
+        "mood_halo_loading": 0.35,
+        "text": "Simple everyday errands can sit on my list for days, yet when a question or project truly fascinates me, hours pass like minutes.",
+        "calm_theme": "Where your focus flows"
+      },
+      {
+        "id": 4,
+        "domain": "C",
+        "aspect": "Entropy Suppression (Orderliness)",
+        "layer": "cortical_invariant",
+        "probe_type": "attractor_depth",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 1.15,
+        "irt_a": 1.52,
+        "irt_b": 0.05,
+        "mood_halo_loading": 0.25,
+        "text": "My mind feels noticeably calmer when my space is tidy and I know what the next few days look like.",
+        "calm_theme": "Structure & rhythm"
+      },
+      {
+        "id": 5,
+        "domain": "E",
+        "aspect": "Affiliative Reward Gain (Enthusiasm)",
+        "layer": "psychophysical_sensory_stream",
+        "probe_type": "acoustic_stream_split",
+        "calibration_status": "calibrated_anchor",
+        "direction": -1,
+        "weight": 1.25,
+        "irt_a": 1.72,
+        "irt_b": -0.05,
+        "mood_halo_loading": 0.3,
+        "text": "When two conversations are happening at the same table, both voices reach me at almost the same volume\u2014I feel much more at ease talking one-on-one.",
+        "calm_theme": "Shared spaces"
+      },
+      {
+        "id": 6,
+        "domain": "E",
+        "aspect": "Agency & Social Impact (Assertiveness)",
+        "layer": "neuromodulatory_state",
+        "probe_type": "social_agency",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 1.15,
+        "irt_a": 1.5,
+        "irt_b": 0.2,
+        "mood_halo_loading": 0.45,
+        "text": "If a group of friends or coworkers is unsure what to do next, I feel comfortable gently stepping in to guide the plan.",
+        "calm_theme": "Shared momentum"
+      },
+      {
+        "id": 7,
+        "domain": "A",
+        "aspect": "Allostatic Resonance (Compassion)",
+        "layer": "cortical_invariant",
+        "probe_type": "allostatic_coupling",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 1.25,
+        "irt_a": 1.68,
+        "irt_b": -0.2,
+        "mood_halo_loading": 0.12,
+        "text": "In a disagreement with someone I care about, making sure we both feel heard matters more to me than winning the point.",
+        "calm_theme": "Connection & care"
+      },
+      {
+        "id": 8,
+        "domain": "A",
+        "aspect": "Normative Friction Suppression (Politeness)",
+        "layer": "cortical_invariant",
+        "probe_type": "directness_prior",
+        "calibration_status": "calibrated_anchor",
+        "direction": -1,
+        "weight": 1.15,
+        "irt_a": 1.45,
+        "irt_b": 0.15,
+        "mood_halo_loading": 0.15,
+        "text": "I appreciate when people say exactly what they mean, rather than wrapping the truth in polite hints.",
+        "calm_theme": "Clarity with others"
+      },
+      {
+        "id": 9,
+        "domain": "N",
+        "aspect": "Uncertainty Vigilance (Withdrawal)",
+        "layer": "neuromodulatory_state",
+        "probe_type": "threat_forecasting",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 1.2,
+        "irt_a": 1.65,
+        "irt_b": 0.0,
+        "mood_halo_loading": 0.65,
+        "text": "Even when things are going well, part of my mind quietly thinks ahead to what might need protecting.",
+        "calm_theme": "Looking ahead"
+      },
+      {
+        "id": 10,
+        "domain": "N",
+        "aspect": "Affective State Gain (Volatility)",
+        "layer": "neuromodulatory_state",
+        "probe_type": "serotonergic_buffer",
+        "calibration_status": "calibrated_anchor",
+        "direction": -1,
+        "weight": 1.15,
+        "irt_a": 1.58,
+        "irt_b": -0.1,
+        "mood_halo_loading": 0.6,
+        "text": "When plans change suddenly, I usually find my footing quickly without feeling thrown off for long.",
+        "calm_theme": "Steadiness in change"
+      },
+      {
+        "id": 11,
+        "domain": "C",
+        "aspect": "Goal-Locked Drive (Industriousness)",
+        "layer": "compensatory_masking_probe",
+        "probe_type": "compensatory_effort_cost",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 0.9,
+        "irt_a": 1.7,
+        "irt_b": 0.0,
+        "mood_halo_loading": 0.35,
+        "text": "People around me see me as steady and on top of things, though they rarely see how much quiet effort it takes me behind the scenes.",
+        "calm_theme": "Quiet effort"
+      },
+      {
+        "id": 12,
+        "domain": "N",
+        "aspect": "Uncertainty Vigilance (Withdrawal)",
+        "layer": "differential_epoch_probe",
+        "probe_type": "epoch_state_delta",
+        "calibration_status": "calibrated_anchor",
+        "direction": 1,
+        "weight": 0.85,
+        "irt_a": 1.75,
+        "irt_b": 0.0,
+        "mood_halo_loading": 0.8,
+        "text": "Compared to times in my life when I\u2019ve felt most rested and at ease, these past couple of weeks have felt heavier or more tiring.",
+        "calm_theme": "Your current season"
+      },
+      {
+        "id": 13,
+        "domain": "C",
+        "aspect": "Entropy Suppression (Orderliness)",
+        "layer": "shadow_behavioral_probe",
+        "probe_type": "sneaky_open_loops",
+        "calibration_status": "shadow_candidate",
+        "empirical_prior_r": -0.61,
+        "direction": -1,
+        "weight": 0.0,
+        "irt_a": 1.42,
+        "irt_b": -0.1,
+        "mood_halo_loading": 0.14,
+        "text": "Having 20+ open browser tabs or saved links feels more like a cozy library of possibilities than clutter I need to clear right away.",
+        "calm_theme": "Everyday digital habits",
+        "scientific_hypothesis": "Disarming ecological behavioral proxy for exploratory novelty foraging vs. linear closure (Anchor C r = -0.61, Salience-Split r = +0.64) that bypasses self-evaluative shame around 'messiness'."
+      },
+      {
+        "id": 14,
+        "domain": "A",
+        "aspect": "Allostatic Resonance (Compassion)",
+        "layer": "shadow_behavioral_probe",
+        "probe_type": "sneaky_text_cushion",
+        "calibration_status": "shadow_candidate",
+        "empirical_prior_r": 0.58,
+        "direction": 1,
+        "weight": 0.0,
+        "irt_a": 1.48,
+        "irt_b": -0.25,
+        "mood_halo_loading": 0.16,
+        "text": "When sending a short text like 'Sounds good', I often add an exclamation point, emoji, or 'haha' just so a plain period doesn't accidentally read as cold.",
+        "calm_theme": "Micro-moments of warmth",
+        "scientific_hypothesis": "Disarming digital pragmatics proxy for interpersonal allostatic cushioning and affiliative tone regulation (Anchor A r = +0.58, Compensatory Masking r = +0.44)."
+      },
+      {
+        "id": 15,
+        "domain": "E",
+        "aspect": "Affiliative Reward Gain (Enthusiasm)",
+        "layer": "shadow_behavioral_probe",
+        "probe_type": "sneaky_canceled_plans",
+        "calibration_status": "shadow_candidate",
+        "empirical_prior_r": -0.63,
+        "direction": -1,
+        "weight": 0.0,
+        "irt_a": 1.54,
+        "irt_b": -0.15,
+        "mood_halo_loading": 0.24,
+        "text": "When a social plan I genuinely wanted to go to gets canceled at the last minute, my very first physical reaction is a quiet wave of relief.",
+        "calm_theme": "Energy & transitions",
+        "scientific_hypothesis": "Decouples affiliative care ('genuinely wanted to go') from autonomic transition & sensory saturation cost (Anchor E r = -0.63, Acoustic Stream Split r = +0.59)."
+      }
+    ]
+  },
+  "cognitive_telemetry_priors": {
+    "schema_version": "1.0.0",
+    "description": "Scientific priors, psychophysical reference norms, and Bayesian de-confounding rules for Aura's 3 Behavioral Micro-Game Telemetry Probes (Pulse Reaction, Constellation Memory, and Mind's Eye Imagery Spectrum).",
+    "defaults": {
+      "median_rt_ms": 290.0,
+      "rt_cv_pct": 14.5,
+      "false_starts": 0,
+      "accuracy_pct": 78.0,
+      "mean_chunk_ms": 420.0,
+      "imagery_vividness": 62.0,
+      "inner_modality": "visual_cinema"
+    },
+    "pulse_reaction": {
+      "id": "pulse_reaction",
+      "title": "Pulse Reaction (Attentional Cadence & Dopamine Gating)",
+      "scientific_construct": "Drift-Diffusion Decision Threshold & Intra-Individual Reaction-Time Variability (RT IIV)",
+      "primary_citations": [
+        "yarkoni_braver_2009_trial_by_trial_rt_variability_fmri.pdf",
+        "garrido_perez_2025_active_inference_drift_diffusion_effort.pdf"
+      ],
+      "norms": {
+        "median_rt_ms": 290.0,
+        "median_rt_sd_ms": 45.0,
+        "rt_cv_pct_steady_norm": 14.0,
+        "rt_cv_pct_phasic_threshold": 22.0,
+        "false_starts_impulsivity_threshold": 1
+      },
+      "parameters": {
+        "median_rt_ms": {
+          "norm": 290.0,
+          "range": [
+            150.0,
+            750.0
+          ],
+          "description": "Median simple visuomotor reaction time across trials (ms). Normative adult baseline ~290ms."
+        },
+        "rt_cv_pct": {
+          "norm": 14.5,
+          "phasic_threshold": 22.0,
+          "range": [
+            4.0,
+            65.0
+          ],
+          "description": "Intra-individual reaction-time coefficient of variation (SD / Mean * 100). Values >22% indicate phasic attentional fluctuation and spark-driven dopaminergic policy gating."
+        },
+        "false_starts": {
+          "norm": 0,
+          "phasic_threshold": 1,
+          "range": [
+            0,
+            10
+          ],
+          "description": "Anticipatory motor responses prior to stimulus onset, reflecting high exploratory readiness / lowered decision boundary during unstimulating wait intervals."
+        }
+      },
+      "bayesian_mask_log_odds": {
+        "adhd_dopamine_forager_cv_above_22": 0.65,
+        "audhd_dual_attractor_cv_above_22": 0.45,
+        "canonical_allistic_cv_below_16": 0.4,
+        "false_start_bonus_per_event": 0.22
+      },
+      "calm_labels": {
+        "steady_measured": {
+          "label": "Steady & Measured Cadence",
+          "condition": "rt_cv_pct <= 22.0 and false_starts <= 1",
+          "calm_note": "Your attention locks in with an even, metronomic rhythm\u2014giving you steady pacing across both quiet and fast-moving moments."
+        },
+        "quick_spark": {
+          "label": "Quick-Spark & Dynamic Cadence",
+          "condition": "rt_cv_pct > 22.0 or false_starts >= 2",
+          "calm_note": "Your attention moves in quick, high-energy bursts\u2014anticipating what comes next and surging fastest when a moment feels alive and urgent."
+        },
+        "deep_deliberate": {
+          "label": "Deliberate & High-Precision Cadence",
+          "condition": "median_rt_ms >= 335.0 and rt_cv_pct <= 20.0",
+          "calm_note": "Your mind takes a beat to verify the signal before acting, trading rushed reflexes for calm, unhurried accuracy."
+        }
+      }
+    },
+    "constellation_memory": {
+      "id": "constellation_memory",
+      "title": "Constellation Memory (Visuospatial Working Memory & Chunking)",
+      "scientific_construct": "Short-Term Synaptic Chunk Compression & Relational Schema Encoding",
+      "primary_citations": [
+        "zhong_tsodyks_2024_synaptic_theory_chunking_working_memory.pdf"
+      ],
+      "norms": {
+        "accuracy_pct_norm": 75.0,
+        "high_accuracy_threshold_pct": 80.0,
+        "mean_chunk_ms_norm": 420.0,
+        "fast_chunk_threshold_ms": 380.0
+      },
+      "parameters": {
+        "accuracy_pct": {
+          "norm": 75.0,
+          "range": [
+            0.0,
+            100.0
+          ],
+          "description": "Percentage of spatial constellation nodes accurately reconstructed from working memory (0..100)."
+        },
+        "mean_chunk_ms": {
+          "norm": 420.0,
+          "fast_chunk_threshold": 380.0,
+          "range": [
+            120.0,
+            1500.0
+          ],
+          "description": "Mean inter-tap transition latency (ms) during pattern reconstruction. High accuracy paired with fast inter-tap chunking boosts the abstract pattern synthesis (Intellect / Systemizing) prior."
+        }
+      },
+      "deconfounding_rules": {
+        "abstract_pattern_synthesis_boost_max_pct": 6.5,
+        "monotropic_precision_log_odds_boost": 0.4,
+        "audhd_dual_attractor_log_odds_boost": 0.35
+      },
+      "calm_labels": {
+        "holistic_constellation": {
+          "label": "Holistic Constellation Memory",
+          "condition": "accuracy_pct >= 80.0 and mean_chunk_ms <= 420.0",
+          "calm_note": "Instead of memorizing isolated dots one by one, your mind naturally compresses the whole geometry into a single connected shape."
+        },
+        "methodical_architect": {
+          "label": "Careful Structural Memory",
+          "condition": "accuracy_pct >= 75.0 and mean_chunk_ms > 420.0",
+          "calm_note": "You rebuild complex patterns step by step with deliberate care, making sure each piece fits before placing the next."
+        },
+        "impressionistic_forager": {
+          "label": "Big-Picture Impression Memory",
+          "condition": "accuracy_pct < 75.0",
+          "calm_note": "Your mind captures the overall gesture and movement of a pattern rather than holding onto rigid grid coordinates."
+        }
+      }
+    },
+    "minds_eye": {
+      "id": "minds_eye",
+      "title": "Mind's Eye (Cortical Imagery Vividness & Inner Modality)",
+      "scientific_construct": "Top-Down V1 Sensory Projection vs. Non-Retinotopic Conceptual/Spatial Representation",
+      "primary_citations": [
+        "dawes_pearson_2020_cognitive_profile_multisensory_aphantasia.pdf",
+        "boere_krigolson_2025_eeg_neural_processing_aphantasia.pdf",
+        "duch_2021_imagery_agnosia_aphantasia_phenomenology.pdf"
+      ],
+      "parameters": {
+        "imagery_vividness": {
+          "range": [
+            0.0,
+            100.0
+          ],
+          "norm": 62.0,
+          "description": "Subjective and probed visual imagery vividness on a 0..100 scale, spanning Aphantasia (<=18) to Hyperphantasia (>=81)."
+        },
+        "inner_modality": {
+          "allowed_values": [
+            "wordless_concept",
+            "inner_voice",
+            "visual_cinema"
+          ],
+          "default": "visual_cinema",
+          "description": "Primary representational format of spontaneous inner thought."
+        }
+      },
+      "vividness_spectrum": [
+        {
+          "tier_id": "aphantasia_concept_first",
+          "min": 0,
+          "max": 18,
+          "scientific_name": "Aphantasia / Concept-First Pure Knowing",
+          "calm_label": "Concept-First Mind (Aphantasia Spectrum)",
+          "calm_note": "Your mind works like a quiet architect: instead of projecting literal pictures behind your eyes, you hold rich, wordless models of how ideas, spaces, and feelings fit together. Standard personality tests often mistake 'not seeing mental pictures' for having less imagination\u2014so we gently corrected your Curiosity & Imagination score (+{boost_pct}%) to honor your true conceptual depth."
+        },
+        {
+          "tier_id": "soft_sketch_imagery",
+          "min": 19,
+          "max": 45,
+          "scientific_name": "Soft Sketch Imagery",
+          "calm_label": "Soft-Sketch & Conceptual Mind",
+          "calm_note": "You think primarily through meaning, intuition, and light gestural outlines rather than heavy visual detail\u2014letting your mind move quickly to the heart of an idea without getting bogged down in surface rendering."
+        },
+        {
+          "tier_id": "vivid_mental_imagery",
+          "min": 46,
+          "max": 80,
+          "scientific_name": "Vivid Mental Imagery",
+          "calm_label": "Vivid Visual Mind",
+          "calm_note": "You can readily call up clear scenes, colors, and memories in your mind's eye, blending visual imagery smoothly with everyday thought."
+        },
+        {
+          "tier_id": "hyperphantasia_cinema",
+          "min": 81,
+          "max": 100,
+          "scientific_name": "Hyperphantasia / Cinema-Grade Imagery",
+          "calm_label": "Cinema-Grade Visual Mind (Hyperphantasia Spectrum)",
+          "calm_note": "Your inner world renders in cinema-grade light, texture, and motion\u2014allowing you to replay memories and simulate future possibilities almost as vividly as seeing them in person."
+        }
+      ],
+      "inner_modalities": {
+        "wordless_concept": {
+          "id": "wordless_concept",
+          "calm_label": "Concept-First Mind (Wordless Knowing)",
+          "description": "Representing ideas directly as abstract relational structures, spatial intuition, and pure meaning prior to words or images."
+        },
+        "inner_voice": {
+          "id": "inner_voice",
+          "calm_label": "Deep Inner-Voice Mind",
+          "description": "Representing thoughts through an articulate internal narrative, cadence, dialogue, and verbal resonance."
+        },
+        "visual_cinema": {
+          "id": "visual_cinema",
+          "calm_label": "Visual-Spatial Cinema Mind",
+          "description": "Representing thoughts as dynamic visual scenes, spatial environments, and sensory simulations."
+        }
+      }
+    },
+    "aphantasia_deconfounder": {
+      "rule_id": "aphantasia_openness_deconfounder",
+      "vividness_threshold": 25.0,
+      "underestimation_pct_min": 12.0,
+      "underestimation_pct_max": 18.0,
+      "target_domain": "O",
+      "target_aspect": "O_intellect",
+      "mechanism": "When imagery_vividness <= 25, standard aesthetic/visual Openness items under-estimate the user's true imaginative capacity by 12%\u201318% because they imagine via wordless conceptual/spatial models rather than V1 visual pictures.",
+      "equation": "boost_pct = 12.0 + 6.0 * ((25.0 - clamp(imagery_vividness, 0.0, 25.0)) / 25.0)"
+    }
+  },
+  "telemetry_priors_schema": {
+    "schema_version": "1.0.0",
+    "description": "Scientific priors, psychophysical reference norms, and Bayesian de-confounding rules for Aura's 3 Behavioral Micro-Game Telemetry Probes (Pulse Reaction, Constellation Memory, and Mind's Eye Imagery Spectrum).",
+    "defaults": {
+      "median_rt_ms": 290.0,
+      "rt_cv_pct": 14.5,
+      "false_starts": 0,
+      "accuracy_pct": 78.0,
+      "mean_chunk_ms": 420.0,
+      "imagery_vividness": 62.0,
+      "inner_modality": "visual_cinema"
+    },
+    "pulse_reaction": {
+      "id": "pulse_reaction",
+      "title": "Pulse Reaction (Attentional Cadence & Dopamine Gating)",
+      "scientific_construct": "Drift-Diffusion Decision Threshold & Intra-Individual Reaction-Time Variability (RT IIV)",
+      "primary_citations": [
+        "yarkoni_braver_2009_trial_by_trial_rt_variability_fmri.pdf",
+        "garrido_perez_2025_active_inference_drift_diffusion_effort.pdf"
+      ],
+      "norms": {
+        "median_rt_ms": 290.0,
+        "median_rt_sd_ms": 45.0,
+        "rt_cv_pct_steady_norm": 14.0,
+        "rt_cv_pct_phasic_threshold": 22.0,
+        "false_starts_impulsivity_threshold": 1
+      },
+      "parameters": {
+        "median_rt_ms": {
+          "norm": 290.0,
+          "range": [
+            150.0,
+            750.0
+          ],
+          "description": "Median simple visuomotor reaction time across trials (ms). Normative adult baseline ~290ms."
+        },
+        "rt_cv_pct": {
+          "norm": 14.5,
+          "phasic_threshold": 22.0,
+          "range": [
+            4.0,
+            65.0
+          ],
+          "description": "Intra-individual reaction-time coefficient of variation (SD / Mean * 100). Values >22% indicate phasic attentional fluctuation and spark-driven dopaminergic policy gating."
+        },
+        "false_starts": {
+          "norm": 0,
+          "phasic_threshold": 1,
+          "range": [
+            0,
+            10
+          ],
+          "description": "Anticipatory motor responses prior to stimulus onset, reflecting high exploratory readiness / lowered decision boundary during unstimulating wait intervals."
+        }
+      },
+      "bayesian_mask_log_odds": {
+        "adhd_dopamine_forager_cv_above_22": 0.65,
+        "audhd_dual_attractor_cv_above_22": 0.45,
+        "canonical_allistic_cv_below_16": 0.4,
+        "false_start_bonus_per_event": 0.22
+      },
+      "calm_labels": {
+        "steady_measured": {
+          "label": "Steady & Measured Cadence",
+          "condition": "rt_cv_pct <= 22.0 and false_starts <= 1",
+          "calm_note": "Your attention locks in with an even, metronomic rhythm\u2014giving you steady pacing across both quiet and fast-moving moments."
+        },
+        "quick_spark": {
+          "label": "Quick-Spark & Dynamic Cadence",
+          "condition": "rt_cv_pct > 22.0 or false_starts >= 2",
+          "calm_note": "Your attention moves in quick, high-energy bursts\u2014anticipating what comes next and surging fastest when a moment feels alive and urgent."
+        },
+        "deep_deliberate": {
+          "label": "Deliberate & High-Precision Cadence",
+          "condition": "median_rt_ms >= 335.0 and rt_cv_pct <= 20.0",
+          "calm_note": "Your mind takes a beat to verify the signal before acting, trading rushed reflexes for calm, unhurried accuracy."
+        }
+      }
+    },
+    "constellation_memory": {
+      "id": "constellation_memory",
+      "title": "Constellation Memory (Visuospatial Working Memory & Chunking)",
+      "scientific_construct": "Short-Term Synaptic Chunk Compression & Relational Schema Encoding",
+      "primary_citations": [
+        "zhong_tsodyks_2024_synaptic_theory_chunking_working_memory.pdf"
+      ],
+      "norms": {
+        "accuracy_pct_norm": 75.0,
+        "high_accuracy_threshold_pct": 80.0,
+        "mean_chunk_ms_norm": 420.0,
+        "fast_chunk_threshold_ms": 380.0
+      },
+      "parameters": {
+        "accuracy_pct": {
+          "norm": 75.0,
+          "range": [
+            0.0,
+            100.0
+          ],
+          "description": "Percentage of spatial constellation nodes accurately reconstructed from working memory (0..100)."
+        },
+        "mean_chunk_ms": {
+          "norm": 420.0,
+          "fast_chunk_threshold": 380.0,
+          "range": [
+            120.0,
+            1500.0
+          ],
+          "description": "Mean inter-tap transition latency (ms) during pattern reconstruction. High accuracy paired with fast inter-tap chunking boosts the abstract pattern synthesis (Intellect / Systemizing) prior."
+        }
+      },
+      "deconfounding_rules": {
+        "abstract_pattern_synthesis_boost_max_pct": 6.5,
+        "monotropic_precision_log_odds_boost": 0.4,
+        "audhd_dual_attractor_log_odds_boost": 0.35
+      },
+      "calm_labels": {
+        "holistic_constellation": {
+          "label": "Holistic Constellation Memory",
+          "condition": "accuracy_pct >= 80.0 and mean_chunk_ms <= 420.0",
+          "calm_note": "Instead of memorizing isolated dots one by one, your mind naturally compresses the whole geometry into a single connected shape."
+        },
+        "methodical_architect": {
+          "label": "Careful Structural Memory",
+          "condition": "accuracy_pct >= 75.0 and mean_chunk_ms > 420.0",
+          "calm_note": "You rebuild complex patterns step by step with deliberate care, making sure each piece fits before placing the next."
+        },
+        "impressionistic_forager": {
+          "label": "Big-Picture Impression Memory",
+          "condition": "accuracy_pct < 75.0",
+          "calm_note": "Your mind captures the overall gesture and movement of a pattern rather than holding onto rigid grid coordinates."
+        }
+      }
+    },
+    "minds_eye": {
+      "id": "minds_eye",
+      "title": "Mind's Eye (Cortical Imagery Vividness & Inner Modality)",
+      "scientific_construct": "Top-Down V1 Sensory Projection vs. Non-Retinotopic Conceptual/Spatial Representation",
+      "primary_citations": [
+        "dawes_pearson_2020_cognitive_profile_multisensory_aphantasia.pdf",
+        "boere_krigolson_2025_eeg_neural_processing_aphantasia.pdf",
+        "duch_2021_imagery_agnosia_aphantasia_phenomenology.pdf"
+      ],
+      "parameters": {
+        "imagery_vividness": {
+          "range": [
+            0.0,
+            100.0
+          ],
+          "norm": 62.0,
+          "description": "Subjective and probed visual imagery vividness on a 0..100 scale, spanning Aphantasia (<=18) to Hyperphantasia (>=81)."
+        },
+        "inner_modality": {
+          "allowed_values": [
+            "wordless_concept",
+            "inner_voice",
+            "visual_cinema"
+          ],
+          "default": "visual_cinema",
+          "description": "Primary representational format of spontaneous inner thought."
+        }
+      },
+      "vividness_spectrum": [
+        {
+          "tier_id": "aphantasia_concept_first",
+          "min": 0,
+          "max": 18,
+          "scientific_name": "Aphantasia / Concept-First Pure Knowing",
+          "calm_label": "Concept-First Mind (Aphantasia Spectrum)",
+          "calm_note": "Your mind works like a quiet architect: instead of projecting literal pictures behind your eyes, you hold rich, wordless models of how ideas, spaces, and feelings fit together. Standard personality tests often mistake 'not seeing mental pictures' for having less imagination\u2014so we gently corrected your Curiosity & Imagination score (+{boost_pct}%) to honor your true conceptual depth."
+        },
+        {
+          "tier_id": "soft_sketch_imagery",
+          "min": 19,
+          "max": 45,
+          "scientific_name": "Soft Sketch Imagery",
+          "calm_label": "Soft-Sketch & Conceptual Mind",
+          "calm_note": "You think primarily through meaning, intuition, and light gestural outlines rather than heavy visual detail\u2014letting your mind move quickly to the heart of an idea without getting bogged down in surface rendering."
+        },
+        {
+          "tier_id": "vivid_mental_imagery",
+          "min": 46,
+          "max": 80,
+          "scientific_name": "Vivid Mental Imagery",
+          "calm_label": "Vivid Visual Mind",
+          "calm_note": "You can readily call up clear scenes, colors, and memories in your mind's eye, blending visual imagery smoothly with everyday thought."
+        },
+        {
+          "tier_id": "hyperphantasia_cinema",
+          "min": 81,
+          "max": 100,
+          "scientific_name": "Hyperphantasia / Cinema-Grade Imagery",
+          "calm_label": "Cinema-Grade Visual Mind (Hyperphantasia Spectrum)",
+          "calm_note": "Your inner world renders in cinema-grade light, texture, and motion\u2014allowing you to replay memories and simulate future possibilities almost as vividly as seeing them in person."
+        }
+      ],
+      "inner_modalities": {
+        "wordless_concept": {
+          "id": "wordless_concept",
+          "calm_label": "Concept-First Mind (Wordless Knowing)",
+          "description": "Representing ideas directly as abstract relational structures, spatial intuition, and pure meaning prior to words or images."
+        },
+        "inner_voice": {
+          "id": "inner_voice",
+          "calm_label": "Deep Inner-Voice Mind",
+          "description": "Representing thoughts through an articulate internal narrative, cadence, dialogue, and verbal resonance."
+        },
+        "visual_cinema": {
+          "id": "visual_cinema",
+          "calm_label": "Visual-Spatial Cinema Mind",
+          "description": "Representing thoughts as dynamic visual scenes, spatial environments, and sensory simulations."
+        }
+      }
+    },
+    "aphantasia_deconfounder": {
+      "rule_id": "aphantasia_openness_deconfounder",
+      "vividness_threshold": 25.0,
+      "underestimation_pct_min": 12.0,
+      "underestimation_pct_max": 18.0,
+      "target_domain": "O",
+      "target_aspect": "O_intellect",
+      "mechanism": "When imagery_vividness <= 25, standard aesthetic/visual Openness items under-estimate the user's true imaginative capacity by 12%\u201318% because they imagine via wordless conceptual/spatial models rather than V1 visual pictures.",
+      "equation": "boost_pct = 12.0 + 6.0 * ((25.0 - clamp(imagery_vividness, 0.0, 25.0)) / 25.0)"
+    }
+  },
+  "shadow_calibration_stats": {
+    "total_calibration_sessions": 25,
+    "shadow_candidate_count": 3,
+    "shadow_items": [
+      {
+        "item_id": 13,
+        "domain": "C",
+        "probe_type": "sneaky_open_loops",
+        "text": "Having 20+ open browser tabs or saved links feels more like a cozy library of possibilities than clutter I need to clear right away.",
+        "calm_theme": "Everyday digital habits",
+        "calibration_status": "shadow_candidate",
+        "n_sessions": 25,
+        "empirical_target_r": -0.849,
+        "empirical_target_p_value": 0.0,
+        "empirical_prior_r": -0.61,
+        "estimated_irt_a": 2.73,
+        "estimated_irt_b": -0.45,
+        "mean_likert": 3.76,
+        "sd_likert": 1.11,
+        "graduation_ready": true,
+        "recommended_graduated_weight": 1.2,
+        "domain_correlations": {
+          "O": {
+            "r": -0.002,
+            "p_value": 0.99431
+          },
+          "C": {
+            "r": -0.849,
+            "p_value": 0.0
+          },
+          "E": {
+            "r": 0.183,
+            "p_value": 0.38015
+          },
+          "A": {
+            "r": 0.251,
+            "p_value": 0.22633
+          },
+          "N": {
+            "r": -0.11,
+            "p_value": 0.60104
+          }
+        },
+        "epistemic_probe_correlations": {
+          "salience_split_index": {
+            "r": 0.801,
+            "p_value": 0.0
+          },
+          "acoustic_stream_index": {
+            "r": -0.191,
+            "p_value": 0.36101
+          },
+          "compensatory_masking_index": {
+            "r": -0.113,
+            "p_value": 0.58962
+          }
+        },
+        "telemetry_correlations": {
+          "rt_cv_pct": {
+            "r": 0.673,
+            "p_value": 0.00023
+          },
+          "memory_accuracy_pct": {
+            "r": 0.005,
+            "p_value": 0.9814
+          },
+          "imagery_vividness": {
+            "r": 0.102,
+            "p_value": 0.62731
+          }
+        },
+        "scientific_hypothesis": "Disarming ecological behavioral proxy for exploratory novelty foraging vs. linear closure (Anchor C r = -0.61, Salience-Split r = +0.64) that bypasses self-evaluative shame around 'messiness'."
+      },
+      {
+        "item_id": 14,
+        "domain": "A",
+        "probe_type": "sneaky_text_cushion",
+        "text": "When sending a short text like 'Sounds good', I often add an exclamation point, emoji, or 'haha' just so a plain period doesn't accidentally read as cold.",
+        "calm_theme": "Micro-moments of warmth",
+        "calibration_status": "shadow_candidate",
+        "n_sessions": 25,
+        "empirical_target_r": 0.682,
+        "empirical_target_p_value": 0.00017,
+        "empirical_prior_r": 0.58,
+        "estimated_irt_a": 1.59,
+        "estimated_irt_b": -0.1,
+        "mean_likert": 3.12,
+        "sd_likert": 0.82,
+        "graduation_ready": true,
+        "recommended_graduated_weight": 1.13,
+        "domain_correlations": {
+          "O": {
+            "r": 0.224,
+            "p_value": 0.2816
+          },
+          "C": {
+            "r": -0.16,
+            "p_value": 0.44473
+          },
+          "E": {
+            "r": 0.405,
+            "p_value": 0.04479
+          },
+          "A": {
+            "r": 0.682,
+            "p_value": 0.00017
+          },
+          "N": {
+            "r": -0.042,
+            "p_value": 0.84128
+          }
+        },
+        "epistemic_probe_correlations": {
+          "salience_split_index": {
+            "r": 0.063,
+            "p_value": 0.76469
+          },
+          "acoustic_stream_index": {
+            "r": -0.485,
+            "p_value": 0.01396
+          },
+          "compensatory_masking_index": {
+            "r": 0.265,
+            "p_value": 0.20089
+          }
+        },
+        "telemetry_correlations": {
+          "rt_cv_pct": {
+            "r": -0.032,
+            "p_value": 0.87831
+          },
+          "memory_accuracy_pct": {
+            "r": -0.195,
+            "p_value": 0.35142
+          },
+          "imagery_vividness": {
+            "r": 0.149,
+            "p_value": 0.47733
+          }
+        },
+        "scientific_hypothesis": "Disarming digital pragmatics proxy for interpersonal allostatic cushioning and affiliative tone regulation (Anchor A r = +0.58, Compensatory Masking r = +0.44)."
+      },
+      {
+        "item_id": 15,
+        "domain": "E",
+        "probe_type": "sneaky_canceled_plans",
+        "text": "When a social plan I genuinely wanted to go to gets canceled at the last minute, my very first physical reaction is a quiet wave of relief.",
+        "calm_theme": "Energy & transitions",
+        "calibration_status": "shadow_candidate",
+        "n_sessions": 25,
+        "empirical_target_r": -0.792,
+        "empirical_target_p_value": 0.0,
+        "empirical_prior_r": -0.63,
+        "estimated_irt_a": 2.21,
+        "estimated_irt_b": -0.44,
+        "mean_likert": 3.6,
+        "sd_likert": 0.89,
+        "graduation_ready": true,
+        "recommended_graduated_weight": 1.2,
+        "domain_correlations": {
+          "O": {
+            "r": -0.211,
+            "p_value": 0.31157
+          },
+          "C": {
+            "r": 0.311,
+            "p_value": 0.12984
+          },
+          "E": {
+            "r": -0.792,
+            "p_value": 0.0
+          },
+          "A": {
+            "r": -0.571,
+            "p_value": 0.0029
+          },
+          "N": {
+            "r": 0.194,
+            "p_value": 0.35401
+          }
+        },
+        "epistemic_probe_correlations": {
+          "salience_split_index": {
+            "r": -0.233,
+            "p_value": 0.2619
+          },
+          "acoustic_stream_index": {
+            "r": 0.8,
+            "p_value": 0.0
+          },
+          "compensatory_masking_index": {
+            "r": 0.175,
+            "p_value": 0.40298
+          }
+        },
+        "telemetry_correlations": {
+          "rt_cv_pct": {
+            "r": -0.226,
+            "p_value": 0.27811
+          },
+          "memory_accuracy_pct": {
+            "r": 0.321,
+            "p_value": 0.11747
+          },
+          "imagery_vividness": {
+            "r": 0.032,
+            "p_value": 0.87834
+          }
+        },
+        "scientific_hypothesis": "Decouples affiliative care ('genuinely wanted to go') from autonomic transition & sensory saturation cost (Anchor E r = -0.63, Acoustic Stream Split r = +0.59)."
+      }
+    ]
+  },
+  "papers_corpus": [
+    {
+      "domain_dir": "01_social_manifold",
+      "domain_title": "01_social_manifold",
+      "paper_count": 7,
+      "papers": [
+        {
+          "filename": "thornton2019_brain_represents_people_habitual_mental_states.pdf",
+          "title": "The brain represents people as the mental states they habitually experience",
+          "authors": [
+            "Mark A. Thornton",
+            "Miriam E. Weaverdyck",
+            "Diana I. Tamir"
+          ],
+          "year": 2019,
+          "identifier": "DOI:10.1038/s41467-019-10309-7 | PMCID:PMC6533269",
+          "pdf_url": "/api/v1/science/pdf/01_social_manifold/thornton2019_brain_represents_people_habitual_mental_states.pdf"
+        },
+        {
+          "filename": "thornton2024_situations_mental_states_action_affordances.pdf",
+          "title": "Neural representations of situations and mental states are composed of sums of representations of the actions they afford",
+          "authors": [
+            "Mark A. Thornton",
+            "Diana I. Tamir"
+          ],
+          "year": 2024,
+          "identifier": "DOI:10.1038/s41467-024-44870-7 | PMCID:PMC10799018",
+          "pdf_url": "/api/v1/science/pdf/01_social_manifold/thornton2024_situations_mental_states_action_affordances.pdf"
+        },
+        {
+          "filename": "schafer2025_social_navigation_power_affiliation_space.pdf",
+          "title": "Social avoidance can be quantified as navigation in abstract social space",
+          "authors": [
+            "Matthew Schafer",
+            "Daniela Schiller"
+          ],
+          "year": 2025,
+          "identifier": "DOI:10.1038/s44271-025-00215-8 | PMCID:PMC11936828",
+          "pdf_url": "/api/v1/science/pdf/01_social_manifold/schafer2025_social_navigation_power_affiliation_space.pdf"
+        },
+        {
+          "filename": "courellis2024_hippocampal_abstract_geometry_inference.pdf",
+          "title": "Abstract representations emerge in human hippocampal neurons during inference",
+          "authors": [
+            "Hristos S. Courellis",
+            "Juri Minxha",
+            "Araceli R. Cardenas",
+            "Daniel L. Kimmel",
+            "Chrystal M. Reed",
+            "Taufik A. Valiante",
+            "C. Daniel Salzman",
+            "Adam N. Mamelak",
+            "Stefano Fusi",
+            "Ueli Rutishauser"
+          ],
+          "year": 2024,
+          "identifier": "DOI:10.1038/s41586-024-07799-x | PMCID:PMC11338822",
+          "pdf_url": "/api/v1/science/pdf/01_social_manifold/courellis2024_hippocampal_abstract_geometry_inference.pdf"
+        },
+        {
+          "filename": "ma2026_hippocampal_prefrontal_emotion_cognitive_maps.pdf",
+          "title": "Map-like representations of emotion knowledge in hippocampal-prefrontal systems",
+          "authors": [
+            "Yudan Ma",
+            "Philip A. Kragel"
+          ],
+          "year": 2026,
+          "identifier": "DOI:10.1038/s41467-025-68240-z | PMCID:PMC12891686",
+          "pdf_url": "/api/v1/science/pdf/01_social_manifold/ma2026_hippocampal_prefrontal_emotion_cognitive_maps.pdf"
+        },
+        {
+          "filename": "rabinowitz2018_machine_theory_of_mind.pdf",
+          "title": "Machine Theory of Mind",
+          "authors": [
+            "Neil C. Rabinowitz",
+            "Frank Perbet",
+            "H. Francis Song",
+            "Chiyuan Zhang",
+            "S. M. Ali Eslami",
+            "Matthew Botvinick"
+          ],
+          "year": 2018,
+          "identifier": "arXiv:1802.07740",
+          "pdf_url": "/api/v1/science/pdf/01_social_manifold/rabinowitz2018_machine_theory_of_mind.pdf"
+        },
+        {
+          "filename": "mitchell_heggs2022_neural_manifold_analysis_brain_dynamics.pdf",
+          "title": "Neural manifold analysis of brain circuit dynamics in health and disease",
+          "authors": [
+            "Rufus Mitchell-Heggs",
+            "Seigfred Prado",
+            "Giuseppe P. Gava",
+            "Mary Ann Go",
+            "Simon R. Schultz"
+          ],
+          "year": 2022,
+          "identifier": "arXiv:2203.11874 | DOI:10.1007/s10827-022-00839-3",
+          "pdf_url": "/api/v1/science/pdf/01_social_manifold/mitchell_heggs2022_neural_manifold_analysis_brain_dynamics.pdf"
+        }
+      ]
+    },
+    {
+      "domain_dir": "02_predictive_neurotypes",
+      "domain_title": "02_predictive_neurotypes",
+      "paper_count": 7,
+      "papers": [
+        {
+          "filename": "lawson_2014_aberrant_precision_autism.pdf",
+          "title": "An aberrant precision account of autism",
+          "authors": [
+            "Rebecca P. Lawson",
+            "Geraint E. Rees",
+            "Karl J. Friston"
+          ],
+          "year": 2014,
+          "identifier": "doi:10.3389/fnhum.2014.00302",
+          "pdf_url": "/api/v1/science/pdf/02_predictive_neurotypes/lawson_2014_aberrant_precision_autism.pdf"
+        },
+        {
+          "filename": "friston_2012_dopamine_affordance_active_inference.pdf",
+          "title": "Dopamine, Affordance and Active Inference",
+          "authors": [
+            "Karl J. Friston",
+            "Tamara Shiner",
+            "Thomas H. B. FitzGerald",
+            "Joseph M. Galea",
+            "Rick A. Adams",
+            "Harriet R. Brown",
+            "Raymond J. Dolan",
+            "Rosalyn Moran",
+            "Klaas Enno Stephan",
+            "Sven Bestmann"
+          ],
+          "year": 2012,
+          "identifier": "doi:10.1371/journal.pcbi.1002327",
+          "pdf_url": "/api/v1/science/pdf/02_predictive_neurotypes/friston_2012_dopamine_affordance_active_inference.pdf"
+        },
+        {
+          "filename": "dacosta_2020_reward_maximisation_discrete_active_inference.pdf",
+          "title": "Reward Maximisation through Discrete Active Inference",
+          "authors": [
+            "Lancelot Da Costa",
+            "Noor Sajid",
+            "Thomas Parr",
+            "Karl J. Friston",
+            "Ryan S. Smith"
+          ],
+          "year": 2020,
+          "identifier": "arXiv:2009.08111",
+          "pdf_url": "/api/v1/science/pdf/02_predictive_neurotypes/dacosta_2020_reward_maximisation_discrete_active_inference.pdf"
+        },
+        {
+          "filename": "mirza_2019_bayesian_selective_attention_active_inference.pdf",
+          "title": "Introducing a Bayesian model of selective attention based on active inference",
+          "authors": [
+            "Muammer Berk Mirza",
+            "Rick A. Adams",
+            "Karl J. Friston",
+            "Thomas Parr"
+          ],
+          "year": 2019,
+          "identifier": "doi:10.1038/s41598-019-50138-8",
+          "pdf_url": "/api/v1/science/pdf/02_predictive_neurotypes/mirza_2019_bayesian_selective_attention_active_inference.pdf"
+        },
+        {
+          "filename": "friston_2022_computational_psychiatry_synapses_sentience.pdf",
+          "title": "Computational psychiatry: from synapses to sentience",
+          "authors": [
+            "Karl J. Friston"
+          ],
+          "year": 2022,
+          "identifier": "doi:10.1038/s41380-022-01743-z",
+          "pdf_url": "/api/v1/science/pdf/02_predictive_neurotypes/friston_2022_computational_psychiatry_synapses_sentience.pdf"
+        },
+        {
+          "filename": "safron_deyoung_2021_cybernetic_big_five_free_energy.pdf",
+          "title": "Integrating Cybernetic Big Five Theory with the free energy principle: A new strategy for modeling personalities as complex systems",
+          "authors": [
+            "Adam Safron",
+            "Colin G. DeYoung"
+          ],
+          "year": 2021,
+          "identifier": "doi:10.1016/B978-0-12-819200-9.00010-7 | doi:10.31234/osf.io/653wp",
+          "pdf_url": "/api/v1/science/pdf/02_predictive_neurotypes/safron_deyoung_2021_cybernetic_big_five_free_energy.pdf"
+        },
+        {
+          "filename": "hinrichs_bolis_2025_geometric_hyperscanning_affect_active_inference.pdf",
+          "title": "Geometric Hyperscanning of Affect under Active Inference",
+          "authors": [
+            "Nicol\u00e1s Hinrichs",
+            "Mahault Albarracin",
+            "Dimitris Bolis",
+            "Yuyue Jiang",
+            "Leonardo Christov-Moore",
+            "Leonhard Schilbach"
+          ],
+          "year": 2025,
+          "identifier": "arXiv:2506.08599 | doi:10.48550/arXiv.2506.08599",
+          "pdf_url": "/api/v1/science/pdf/02_predictive_neurotypes/hinrichs_bolis_2025_geometric_hyperscanning_affect_active_inference.pdf"
+        }
+      ]
+    },
+    {
+      "domain_dir": "03_computational_psychometrics",
+      "domain_title": "03_computational_psychometrics",
+      "paper_count": 8,
+      "papers": [
+        {
+          "filename": "buerkner_2019_bayesian_irt_brms_stan.pdf",
+          "title": "Bayesian Item Response Modeling in R with brms and Stan",
+          "authors": [
+            "Paul-Christian B\u00fcrkner"
+          ],
+          "year": 2019,
+          "identifier": "1905.09501",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/buerkner_2019_bayesian_irt_brms_stan.pdf"
+        },
+        {
+          "filename": "li_gibbons_rockova_2025_deep_multidimensional_cat.pdf",
+          "title": "Deep Computerized Adaptive Testing",
+          "authors": [
+            "Jiguang Li",
+            "Robert Gibbons",
+            "Veronika Ro\u010dkov\u00e1"
+          ],
+          "year": 2025,
+          "identifier": "2502.19275",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/li_gibbons_rockova_2025_deep_multidimensional_cat.pdf"
+        },
+        {
+          "filename": "tran_phung_venkatesh_2014_thurstonian_boltzmann_machines.pdf",
+          "title": "Thurstonian Boltzmann Machines: Learning from Multiple Inequalities",
+          "authors": [
+            "Truyen Tran",
+            "Dinh Phung",
+            "Svetha Venkatesh"
+          ],
+          "year": 2014,
+          "identifier": "1408.0055",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/tran_phung_venkatesh_2014_thurstonian_boltzmann_machines.pdf"
+        },
+        {
+          "filename": "colombi_giordano_gottard_iannario_2016_ordinal_responses_latent_uncertainty.pdf",
+          "title": "Modelling Ordinal Responses with Uncertainty: a Hierarchical Marginal Model with Latent Uncertainty components",
+          "authors": [
+            "Roberto Colombi",
+            "Sabrina Giordano",
+            "Anna Gottard",
+            "Maria Iannario"
+          ],
+          "year": 2016,
+          "identifier": "1607.00882",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/colombi_giordano_gottard_iannario_2016_ordinal_responses_latent_uncertainty.pdf"
+        },
+        {
+          "filename": "epskamp_maris_waldorp_borsboom_2016_network_psychometrics_irt_ising.pdf",
+          "title": "Network Psychometrics",
+          "authors": [
+            "Sacha Epskamp",
+            "Gunter K. J. Maris",
+            "Lourens J. Waldorp",
+            "Denny Borsboom"
+          ],
+          "year": 2016,
+          "identifier": "1609.02818",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/epskamp_maris_waldorp_borsboom_2016_network_psychometrics_irt_ising.pdf"
+        },
+        {
+          "filename": "epskamp_rhemtulla_borsboom_2016_generalized_network_psychometrics.pdf",
+          "title": "Generalized Network Psychometrics: Combining Network and Latent Variable Models",
+          "authors": [
+            "Sacha Epskamp",
+            "Mijke Rhemtulla",
+            "Denny Borsboom"
+          ],
+          "year": 2016,
+          "identifier": "1605.09288",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/epskamp_rhemtulla_borsboom_2016_generalized_network_psychometrics.pdf"
+        },
+        {
+          "filename": "epskamp_waldorp_mottus_borsboom_2016_ggm_timeseries_within_between_person.pdf",
+          "title": "The Gaussian Graphical Model in Cross-sectional and Time-series Data",
+          "authors": [
+            "Sacha Epskamp",
+            "Lourens J. Waldorp",
+            "Ren\u00e9 M\u00f5ttus",
+            "Denny Borsboom"
+          ],
+          "year": 2016,
+          "identifier": "1609.04156",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/epskamp_waldorp_mottus_borsboom_2016_ggm_timeseries_within_between_person.pdf"
+        },
+        {
+          "filename": "epskamp_borsboom_fried_2016_psychological_networks_accuracy.pdf",
+          "title": "Estimating Psychological Networks and their Accuracy: A Tutorial Paper",
+          "authors": [
+            "Sacha Epskamp",
+            "Denny Borsboom",
+            "Eiko I. Fried"
+          ],
+          "year": 2016,
+          "identifier": "1604.08462",
+          "pdf_url": "/api/v1/science/pdf/03_computational_psychometrics/epskamp_borsboom_fried_2016_psychological_networks_accuracy.pdf"
+        }
+      ]
+    },
+    {
+      "domain_dir": "04_cognitive_telemetry",
+      "domain_title": "Cognitive Telemetry, Aphantasia/Hyperphantasia Imagery Spectrum, Drift-Diffusion RT Variability & Working Memory Chunking",
+      "paper_count": 6,
+      "papers": [
+        {
+          "filename": "dawes_pearson_2020_cognitive_profile_multisensory_aphantasia.pdf",
+          "title": "A cognitive profile of multi-sensory imagery, memory and dreaming in aphantasia",
+          "authors": [
+            "Alexei J. Dawes",
+            "Rebecca Keogh",
+            "Thomas Andrillon",
+            "Joel Pearson"
+          ],
+          "year": 2020,
+          "identifier": "10.1038/s41598-020-65705-7",
+          "pdf_url": "/api/v1/science/pdf/04_cognitive_telemetry/dawes_pearson_2020_cognitive_profile_multisensory_aphantasia.pdf"
+        },
+        {
+          "filename": "boere_krigolson_2025_eeg_neural_processing_aphantasia.pdf",
+          "title": "Task evoked EEG reveals neural processing differences in aphantasia",
+          "authors": [
+            "K. Boere",
+            "R. Krempel",
+            "E. Walsh",
+            "H. Li",
+            "L. McLaughlin",
+            "O. E. Krigolson",
+            "A. Blomkvist"
+          ],
+          "year": 2025,
+          "identifier": "10.1038/s41598-025-27735-x",
+          "pdf_url": "/api/v1/science/pdf/04_cognitive_telemetry/boere_krigolson_2025_eeg_neural_processing_aphantasia.pdf"
+        },
+        {
+          "filename": "duch_2021_imagery_agnosia_aphantasia_phenomenology.pdf",
+          "title": "Imagery agnosia and its phenomenology",
+          "authors": [
+            "W\u0142odzis\u0142aw Duch"
+          ],
+          "year": 2021,
+          "identifier": "arXiv:2112.10882",
+          "pdf_url": "/api/v1/science/pdf/04_cognitive_telemetry/duch_2021_imagery_agnosia_aphantasia_phenomenology.pdf"
+        },
+        {
+          "filename": "yarkoni_braver_2009_trial_by_trial_rt_variability_fmri.pdf",
+          "title": "BOLD correlates of trial-by-trial reaction time variability in gray and white matter: a multi-study fMRI analysis",
+          "authors": [
+            "Tal Yarkoni",
+            "Deanna M. Barch",
+            "Jeremy R. Gray",
+            "Thomas E. Conturo",
+            "Todd S. Braver"
+          ],
+          "year": 2009,
+          "identifier": "10.1371/journal.pone.0004257",
+          "pdf_url": "/api/v1/science/pdf/04_cognitive_telemetry/yarkoni_braver_2009_trial_by_trial_rt_variability_fmri.pdf"
+        },
+        {
+          "filename": "garrido_perez_2025_active_inference_drift_diffusion_effort.pdf",
+          "title": "Cognitive Effort in the Two-Step Task: An Active Inference Drift-Diffusion Model Approach",
+          "authors": [
+            "Alvaro Garrido Perez",
+            "Viktor Lemoine",
+            "Amrapali Pednekar",
+            "Maarten Rood",
+            "Olga Kulagina"
+          ],
+          "year": 2025,
+          "identifier": "arXiv:2508.04435",
+          "pdf_url": "/api/v1/science/pdf/04_cognitive_telemetry/garrido_perez_2025_active_inference_drift_diffusion_effort.pdf"
+        },
+        {
+          "filename": "zhong_tsodyks_2024_synaptic_theory_chunking_working_memory.pdf",
+          "title": "Synaptic Theory of Chunking in Working Memory",
+          "authors": [
+            "Weishun Zhong",
+            "Mikhail Katkov",
+            "Misha Tsodyks"
+          ],
+          "year": 2024,
+          "identifier": "arXiv:2408.07637",
+          "pdf_url": "/api/v1/science/pdf/04_cognitive_telemetry/zhong_tsodyks_2024_synaptic_theory_chunking_working_memory.pdf"
+        }
+      ]
+    }
+  ]
+}

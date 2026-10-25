@@ -1,0 +1,18 @@
+# Python virtual environments & cache
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node dependencies & build artifacts
+frontend/node_modules/
+node_modules/
+*.log
+
+# SQLite WAL runtime temp files
+backend/*.db-shm
+backend/*.db-wal
+
+# OS / Editor
+.DS_Store
+.env

@@ -1,0 +1,137 @@
+{
+  "collection": "01_social_manifold",
+  "title": "Social Neuroscience & Person-Space Manifold Literature Corpus",
+  "description": "Foundational full-text papers establishing the intrinsic dimensionality, representational geometry, hippocampal cognitive mapping, and Theory-of-Mind state-space mechanics for Aura's person-space manifold engine.",
+  "directory": "/home/ubuntu/personality-lab/science/papers/01_social_manifold",
+  "paper_count": 7,
+  "papers": [
+    {
+      "filename": "thornton2019_brain_represents_people_habitual_mental_states.pdf",
+      "title": "The brain represents people as the mental states they habitually experience",
+      "authors": [
+        "Mark A. Thornton",
+        "Miriam E. Weaverdyck",
+        "Diana I. Tamir"
+      ],
+      "year": 2019,
+      "venue": "Nature Communications",
+      "source_id": "DOI:10.1038/s41467-019-10309-7 | PMCID:PMC6533269",
+      "url": "https://www.nature.com/articles/s41467-019-10309-7.pdf",
+      "bytes": 2103161,
+      "pages": 10,
+      "sha256": "e344a9c533f6c14f",
+      "mathematical_mechanistic_insight": "Establishes the Summation Model of Person-Space Geometry via Representational Similarity Analysis (RSA) in the social brain network (dmPFC, vmPFC, precuneus, TPJ, ATL). A person p's neural representation r_p is the stationary probability-weighted linear expectation over the low-dimensional 3D mental state manifold (Rationality, Social Impact, Valence): r_p = sum_{m in M} P(m | p) v_m. This yields a positive semi-definite person-similarity kernel K_person(p_i, p_j) = p_i^T Sigma_M p_j, bridging fast transient mental-state trajectories v_m(t) and slow invariant person coordinates r_p via ergodic expectation."
+    },
+    {
+      "filename": "thornton2024_situations_mental_states_action_affordances.pdf",
+      "title": "Neural representations of situations and mental states are composed of sums of representations of the actions they afford",
+      "authors": [
+        "Mark A. Thornton",
+        "Diana I. Tamir"
+      ],
+      "year": 2024,
+      "venue": "Nature Communications",
+      "source_id": "DOI:10.1038/s41467-024-44870-7 | PMCID:PMC10799018",
+      "url": "https://www.nature.com/articles/s41467-024-44870-7.pdf",
+      "bytes": 1035542,
+      "pages": 13,
+      "sha256": "6e7ce66192b8afd6",
+      "mathematical_mechanistic_insight": "Proves a 3-tier compositional linear operator hierarchy (Actions -> Mental States & Situations -> Persons). Neural representations of mental states v_m and situations s_c decompose as conditional probability-weighted sums over a 6D action-affordance basis (ACT-FAST: Abstraction, Creation, Tradition, Food, Animacy, Spiritualism): v_m = sum_k P(a_k | m) a_k and s_c = sum_k P(a_k | c) a_k. Combined with Thornton et al. (2019), person representations factorize as r_p = P_{p->m} P_{m->a} A, enabling zero-shot prediction of person-situation behavioral compatibility via inner products in the shared action-affordance subspace."
+    },
+    {
+      "filename": "schafer2025_social_navigation_power_affiliation_space.pdf",
+      "title": "Social avoidance can be quantified as navigation in abstract social space",
+      "authors": [
+        "Matthew Schafer",
+        "Daniela Schiller"
+      ],
+      "year": 2025,
+      "venue": "Communications Psychology",
+      "source_id": "DOI:10.1038/s44271-025-00215-8 | PMCID:PMC11936828",
+      "url": "https://www.nature.com/articles/s44271-025-00215-8.pdf",
+      "bytes": 4399876,
+      "pages": 12,
+      "sha256": "f56a78180590c8e6",
+      "mathematical_mechanistic_insight": "Formalizes the 2D Hippocampal Social Navigation Manifold (Power x Affiliation) in Euclidean and polar coordinates relative to the self. Each interactant j traces a kinematic trajectory x_j(t) = (A_j(t), P_j(t)) in [-1, 1]^2 with egocentric social vector angle theta_j(t) = atan2(P_j, A_j), Euclidean social distance d_j(t) = ||x_j(t) - x_self||_2, step-velocity ||Delta x_j(t)||_2, vector consistency, and convex-hull area of social exploration. Provides exact state-update equations for Aura's relational manifold tracker from discrete dyadic choices."
+    },
+    {
+      "filename": "courellis2024_hippocampal_abstract_geometry_inference.pdf",
+      "title": "Abstract representations emerge in human hippocampal neurons during inference",
+      "authors": [
+        "Hristos S. Courellis",
+        "Juri Minxha",
+        "Araceli R. Cardenas",
+        "Daniel L. Kimmel",
+        "Chrystal M. Reed",
+        "Taufik A. Valiante",
+        "C. Daniel Salzman",
+        "Adam N. Mamelak",
+        "Stefano Fusi",
+        "Ueli Rutishauser"
+      ],
+      "year": 2024,
+      "venue": "Nature",
+      "source_id": "DOI:10.1038/s41586-024-07799-x | PMCID:PMC11338822",
+      "url": "https://www.nature.com/articles/s41586-024-07799-x.pdf",
+      "bytes": 4569709,
+      "pages": 26,
+      "sha256": "a35c9cf6631f68c6",
+      "mathematical_mechanistic_insight": "Demonstrates in human hippocampal single-neuron recordings how abstract inference reorganizes neural state space into a low-dimensional, disentangled geometry with parallel coding axes across orthogonal latent variables. Contributes two rigorous geometric metrics to Aura's science/ validation suite: (1) Shattering Dimensionality (SD), the mean linear decoding accuracy across all balanced binary dichotomies of latent configurations, and (2) Cross-Condition Generalization Performance (CCGP) and Coding Vector ParallelismScore (cosine similarity of linear decision normals across held-out social/task contexts)."
+    },
+    {
+      "filename": "ma2026_hippocampal_prefrontal_emotion_cognitive_maps.pdf",
+      "title": "Map-like representations of emotion knowledge in hippocampal-prefrontal systems",
+      "authors": [
+        "Yudan Ma",
+        "Philip A. Kragel"
+      ],
+      "year": 2026,
+      "venue": "Nature Communications",
+      "source_id": "DOI:10.1038/s41467-025-68240-z | PMCID:PMC12891686",
+      "url": "https://www.nature.com/articles/s41467-025-68240-z.pdf",
+      "bytes": 10402597,
+      "pages": 14,
+      "sha256": "60a295aa954ba811",
+      "mathematical_mechanistic_insight": "Unifies continuous 2D affective manifolds (Valence x Arousal) with Tolman-Eichenbaum cognitive map theory and Successor Representations (SR) in the hippocampal-prefrontal (vmPFC/dmPFC) circuit. Shows that neural similarity simultaneously reflects Euclidean metric distance in the 2D conceptual manifold and multi-step Markov transition proximity M = (I - gamma T)^{-1} built from empirical emotion transition matrices T_{ij} = P(e_{t+1}=j | e_t=i). Directly parameterizes Aura's predictive affective state-transition prior and geodesic manifold distance."
+    },
+    {
+      "filename": "rabinowitz2018_machine_theory_of_mind.pdf",
+      "title": "Machine Theory of Mind",
+      "authors": [
+        "Neil C. Rabinowitz",
+        "Frank Perbet",
+        "H. Francis Song",
+        "Chiyuan Zhang",
+        "S. M. Ali Eslami",
+        "Matthew Botvinick"
+      ],
+      "year": 2018,
+      "venue": "Proceedings of the 35th International Conference on Machine Learning (ICML), PMLR 80:4218-4227",
+      "source_id": "arXiv:1802.07740",
+      "url": "https://arxiv.org/pdf/1802.07740.pdf",
+      "bytes": 5179024,
+      "pages": 6,
+      "sha256": "40342e82e6f73161",
+      "mathematical_mechanistic_insight": "Formulates the ToMnet meta-learning observer architecture that explicitly factorizes an observed agent's state into a slow, episode-invariant character embedding e_char in R^{d_c} (aggregated over past behavioral trajectories) and a fast, dynamic mental-state embedding e_mental,t in R^{d_m} (updated recurrently within the current episode) to predict action distributions pi(a_t | s_t, e_char, e_mental,t) and false beliefs. Proves that low-dimensional bottleneck embeddings spontaneously recover the intrinsic coordinates of agent personality/preference parameters without explicit trait labels."
+    },
+    {
+      "filename": "mitchell_heggs2022_neural_manifold_analysis_brain_dynamics.pdf",
+      "title": "Neural manifold analysis of brain circuit dynamics in health and disease",
+      "authors": [
+        "Rufus Mitchell-Heggs",
+        "Seigfred Prado",
+        "Giuseppe P. Gava",
+        "Mary Ann Go",
+        "Simon R. Schultz"
+      ],
+      "year": 2022,
+      "venue": "Journal of Computational Neuroscience (arXiv preprint)",
+      "source_id": "arXiv:2203.11874 | DOI:10.1007/s10827-022-00839-3",
+      "url": "https://arxiv.org/pdf/2203.11874.pdf",
+      "bytes": 18690272,
+      "pages": 23,
+      "sha256": "b00ebe7847a2eb50",
+      "mathematical_mechanistic_insight": "Synthesizes the mathematical foundations for estimating Intrinsic Dimensionality (d_int << N) and latent dynamical flows dot{z} = f(z) on low-dimensional manifolds embedded in high-dimensional observation spaces R^N. Details spectral participation ratio PR = (sum lambda_i)^2 / sum lambda_i^2, geodesic graph distances (Isomap), topological neighborhood graphs (UMAP/MIND), and Procrustes/CCA cross-subject manifold alignment, providing the core dimensionality-estimation and manifold-alignment algorithms for Aura's science/ engine."
+    }
+  ]
+}

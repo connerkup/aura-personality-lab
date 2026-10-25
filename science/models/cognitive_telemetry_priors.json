@@ -1,0 +1,207 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Scientific priors, psychophysical reference norms, and Bayesian de-confounding rules for Aura's 3 Behavioral Micro-Game Telemetry Probes (Pulse Reaction, Constellation Memory, and Mind's Eye Imagery Spectrum).",
+  "defaults": {
+    "median_rt_ms": 290.0,
+    "rt_cv_pct": 14.5,
+    "false_starts": 0,
+    "accuracy_pct": 78.0,
+    "mean_chunk_ms": 420.0,
+    "imagery_vividness": 62.0,
+    "inner_modality": "visual_cinema"
+  },
+  "pulse_reaction": {
+    "id": "pulse_reaction",
+    "title": "Pulse Reaction (Attentional Cadence & Dopamine Gating)",
+    "scientific_construct": "Drift-Diffusion Decision Threshold & Intra-Individual Reaction-Time Variability (RT IIV)",
+    "primary_citations": [
+      "yarkoni_braver_2009_trial_by_trial_rt_variability_fmri.pdf",
+      "garrido_perez_2025_active_inference_drift_diffusion_effort.pdf"
+    ],
+    "norms": {
+      "median_rt_ms": 290.0,
+      "median_rt_sd_ms": 45.0,
+      "rt_cv_pct_steady_norm": 14.0,
+      "rt_cv_pct_phasic_threshold": 22.0,
+      "false_starts_impulsivity_threshold": 1
+    },
+    "parameters": {
+      "median_rt_ms": {
+        "norm": 290.0,
+        "range": [150.0, 750.0],
+        "description": "Median simple visuomotor reaction time across trials (ms). Normative adult baseline ~290ms."
+      },
+      "rt_cv_pct": {
+        "norm": 14.5,
+        "phasic_threshold": 22.0,
+        "range": [4.0, 65.0],
+        "description": "Intra-individual reaction-time coefficient of variation (SD / Mean * 100). Values >22% indicate phasic attentional fluctuation and spark-driven dopaminergic policy gating."
+      },
+      "false_starts": {
+        "norm": 0,
+        "phasic_threshold": 1,
+        "range": [0, 10],
+        "description": "Anticipatory motor responses prior to stimulus onset, reflecting high exploratory readiness / lowered decision boundary during unstimulating wait intervals."
+      }
+    },
+    "bayesian_mask_log_odds": {
+      "adhd_dopamine_forager_cv_above_22": 0.65,
+      "audhd_dual_attractor_cv_above_22": 0.45,
+      "canonical_allistic_cv_below_16": 0.40,
+      "false_start_bonus_per_event": 0.22
+    },
+    "calm_labels": {
+      "steady_measured": {
+        "label": "Steady & Measured Cadence",
+        "condition": "rt_cv_pct <= 22.0 and false_starts <= 1",
+        "calm_note": "Your attention locks in with an even, metronomic rhythm—giving you steady pacing across both quiet and fast-moving moments."
+      },
+      "quick_spark": {
+        "label": "Quick-Spark & Dynamic Cadence",
+        "condition": "rt_cv_pct > 22.0 or false_starts >= 2",
+        "calm_note": "Your attention moves in quick, high-energy bursts—anticipating what comes next and surging fastest when a moment feels alive and urgent."
+      },
+      "deep_deliberate": {
+        "label": "Deliberate & High-Precision Cadence",
+        "condition": "median_rt_ms >= 335.0 and rt_cv_pct <= 20.0",
+        "calm_note": "Your mind takes a beat to verify the signal before acting, trading rushed reflexes for calm, unhurried accuracy."
+      }
+    }
+  },
+  "constellation_memory": {
+    "id": "constellation_memory",
+    "title": "Constellation Memory (Visuospatial Working Memory & Chunking)",
+    "scientific_construct": "Short-Term Synaptic Chunk Compression & Relational Schema Encoding",
+    "primary_citations": [
+      "zhong_tsodyks_2024_synaptic_theory_chunking_working_memory.pdf"
+    ],
+    "norms": {
+      "accuracy_pct_norm": 75.0,
+      "high_accuracy_threshold_pct": 80.0,
+      "mean_chunk_ms_norm": 420.0,
+      "fast_chunk_threshold_ms": 380.0
+    },
+    "parameters": {
+      "accuracy_pct": {
+        "norm": 75.0,
+        "range": [0.0, 100.0],
+        "description": "Percentage of spatial constellation nodes accurately reconstructed from working memory (0..100)."
+      },
+      "mean_chunk_ms": {
+        "norm": 420.0,
+        "fast_chunk_threshold": 380.0,
+        "range": [120.0, 1500.0],
+        "description": "Mean inter-tap transition latency (ms) during pattern reconstruction. High accuracy paired with fast inter-tap chunking boosts the abstract pattern synthesis (Intellect / Systemizing) prior."
+      }
+    },
+    "deconfounding_rules": {
+      "abstract_pattern_synthesis_boost_max_pct": 6.5,
+      "monotropic_precision_log_odds_boost": 0.40,
+      "audhd_dual_attractor_log_odds_boost": 0.35
+    },
+    "calm_labels": {
+      "holistic_constellation": {
+        "label": "Holistic Constellation Memory",
+        "condition": "accuracy_pct >= 80.0 and mean_chunk_ms <= 420.0",
+        "calm_note": "Instead of memorizing isolated dots one by one, your mind naturally compresses the whole geometry into a single connected shape."
+      },
+      "methodical_architect": {
+        "label": "Careful Structural Memory",
+        "condition": "accuracy_pct >= 75.0 and mean_chunk_ms > 420.0",
+        "calm_note": "You rebuild complex patterns step by step with deliberate care, making sure each piece fits before placing the next."
+      },
+      "impressionistic_forager": {
+        "label": "Big-Picture Impression Memory",
+        "condition": "accuracy_pct < 75.0",
+        "calm_note": "Your mind captures the overall gesture and movement of a pattern rather than holding onto rigid grid coordinates."
+      }
+    }
+  },
+  "minds_eye": {
+    "id": "minds_eye",
+    "title": "Mind's Eye (Cortical Imagery Vividness & Inner Modality)",
+    "scientific_construct": "Top-Down V1 Sensory Projection vs. Non-Retinotopic Conceptual/Spatial Representation",
+    "primary_citations": [
+      "dawes_pearson_2020_cognitive_profile_multisensory_aphantasia.pdf",
+      "boere_krigolson_2025_eeg_neural_processing_aphantasia.pdf",
+      "duch_2021_imagery_agnosia_aphantasia_phenomenology.pdf"
+    ],
+    "parameters": {
+      "imagery_vividness": {
+        "range": [0.0, 100.0],
+        "norm": 62.0,
+        "description": "Subjective and probed visual imagery vividness on a 0..100 scale, spanning Aphantasia (<=18) to Hyperphantasia (>=81)."
+      },
+      "inner_modality": {
+        "allowed_values": [
+          "wordless_concept",
+          "inner_voice",
+          "visual_cinema"
+        ],
+        "default": "visual_cinema",
+        "description": "Primary representational format of spontaneous inner thought."
+      }
+    },
+    "vividness_spectrum": [
+      {
+        "tier_id": "aphantasia_concept_first",
+        "min": 0,
+        "max": 18,
+        "scientific_name": "Aphantasia / Concept-First Pure Knowing",
+        "calm_label": "Concept-First Mind (Aphantasia Spectrum)",
+        "calm_note": "Your mind works like a quiet architect: instead of projecting literal pictures behind your eyes, you hold rich, wordless models of how ideas, spaces, and feelings fit together. Standard personality tests often mistake 'not seeing mental pictures' for having less imagination—so we gently corrected your Curiosity & Imagination score (+{boost_pct}%) to honor your true conceptual depth."
+      },
+      {
+        "tier_id": "soft_sketch_imagery",
+        "min": 19,
+        "max": 45,
+        "scientific_name": "Soft Sketch Imagery",
+        "calm_label": "Soft-Sketch & Conceptual Mind",
+        "calm_note": "You think primarily through meaning, intuition, and light gestural outlines rather than heavy visual detail—letting your mind move quickly to the heart of an idea without getting bogged down in surface rendering."
+      },
+      {
+        "tier_id": "vivid_mental_imagery",
+        "min": 46,
+        "max": 80,
+        "scientific_name": "Vivid Mental Imagery",
+        "calm_label": "Vivid Visual Mind",
+        "calm_note": "You can readily call up clear scenes, colors, and memories in your mind's eye, blending visual imagery smoothly with everyday thought."
+      },
+      {
+        "tier_id": "hyperphantasia_cinema",
+        "min": 81,
+        "max": 100,
+        "scientific_name": "Hyperphantasia / Cinema-Grade Imagery",
+        "calm_label": "Cinema-Grade Visual Mind (Hyperphantasia Spectrum)",
+        "calm_note": "Your inner world renders in cinema-grade light, texture, and motion—allowing you to replay memories and simulate future possibilities almost as vividly as seeing them in person."
+      }
+    ],
+    "inner_modalities": {
+      "wordless_concept": {
+        "id": "wordless_concept",
+        "calm_label": "Concept-First Mind (Wordless Knowing)",
+        "description": "Representing ideas directly as abstract relational structures, spatial intuition, and pure meaning prior to words or images."
+      },
+      "inner_voice": {
+        "id": "inner_voice",
+        "calm_label": "Deep Inner-Voice Mind",
+        "description": "Representing thoughts through an articulate internal narrative, cadence, dialogue, and verbal resonance."
+      },
+      "visual_cinema": {
+        "id": "visual_cinema",
+        "calm_label": "Visual-Spatial Cinema Mind",
+        "description": "Representing thoughts as dynamic visual scenes, spatial environments, and sensory simulations."
+      }
+    }
+  },
+  "aphantasia_deconfounder": {
+    "rule_id": "aphantasia_openness_deconfounder",
+    "vividness_threshold": 25.0,
+    "underestimation_pct_min": 12.0,
+    "underestimation_pct_max": 18.0,
+    "target_domain": "O",
+    "target_aspect": "O_intellect",
+    "mechanism": "When imagery_vividness <= 25, standard aesthetic/visual Openness items under-estimate the user's true imaginative capacity by 12%–18% because they imagine via wordless conceptual/spatial models rather than V1 visual pictures.",
+    "equation": "boost_pct = 12.0 + 6.0 * ((25.0 - clamp(imagery_vividness, 0.0, 25.0)) / 25.0)"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "collection_id": "03_computational_psychometrics",
+  "title": "Computational Psychometrics, Bayesian IRT/CAT & State-Trait Dynamics",
+  "description": "Full-text open-access papers establishing the mathematical foundations for Aura's Bayesian Item Response Theory (IRT), Multidimensional Computerized Adaptive Testing (CAT), Thurstonian/ordinal response-bias de-confounding, and dynamical network/state-space trait-state separation in science/engine/neuro_psychometrics.py.",
+  "target_engine_module": "science/engine/neuro_psychometrics.py",
+  "verified_pdf_count": 8,
+  "papers": [
+    {
+      "filename": "buerkner_2019_bayesian_irt_brms_stan.pdf",
+      "arxiv_id": "1905.09501",
+      "title": "Bayesian Item Response Modeling in R with brms and Stan",
+      "authors": [
+        "Paul-Christian Bürkner"
+      ],
+      "year": 2019,
+      "journal_venue": "Journal of Statistical Software, 100(5), 1-54 (2021)",
+      "pdf_url": "https://arxiv.org/pdf/1905.09501.pdf",
+      "size_bytes": 943176,
+      "pillar": "Bayesian Item Response Theory (IRT) & Hierarchical Latent Estimation",
+      "algorithmic_formulation": "Hierarchical Bayesian generalized linear and non-linear mixed models for 1PL, 2PL, 3PL, and Graded Response Models (GRM) with joint posterior estimation over person ability parameters theta_p and item discrimination/difficulty parameters (alpha_i, beta_i): P(y_{pi} = 1 | theta_p, alpha_i, beta_i) = logistic(alpha_i * (theta_p - beta_i)), regularized by weakly informative hierarchical priors on theta_p ~ N(0, sigma_theta^2).",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.score_responses_irt",
+          "NeuroPsychometricEngine.infer_neurodevelopmental_mask_probabilities"
+        ],
+        "implementation_details": "Directly informs score_responses_irt() in science/engine/neuro_psychometrics.py (lines 53-99), which applies a 2PL/Graded IRT discrimination parameter a_i (irt_a) and location threshold b_i (irt_b) from science/models/item_bank_irt.json, accumulates item Fisher Information I_i(theta) = a_i^2 * p_i(theta) * (1 - p_i(theta)) on top of a Bayesian prior precision baseline (I_0 = 0.25), and computes posterior standard error bands SE(theta_d) = 1 / sqrt(I_0 + sum_i I_i(theta_d)). Also motivates hierarchical prior offsets B_wiring(mask) in neurodevelopmental_masks.json."
+      }
+    },
+    {
+      "filename": "li_gibbons_rockova_2025_deep_multidimensional_cat.pdf",
+      "arxiv_id": "2502.19275",
+      "title": "Deep Computerized Adaptive Testing",
+      "authors": [
+        "Jiguang Li",
+        "Robert Gibbons",
+        "Veronika Ročková"
+      ],
+      "year": 2025,
+      "journal_venue": "arXiv Preprint (stat.ME / stat.ML)",
+      "pdf_url": "https://arxiv.org/pdf/2502.19275.pdf",
+      "size_bytes": 952315,
+      "pillar": "Bayesian Multidimensional Computerized Adaptive Testing (MCAT)",
+      "algorithmic_formulation": "Integrates Bayesian sparse multivariate Item Response Theory with sequential decision policies for Multidimensional Computerized Adaptive Testing (MCAT). Replaces expensive per-step MCMC loops with fast posterior uncertainty quantification and multi-domain utility maximization balancing Fisher information gain I_i(theta_t) against cross-dimensional factor coverage.",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.select_next_adaptive_item"
+        ],
+        "implementation_details": "Directly informs select_next_adaptive_item() in science/engine/neuro_psychometrics.py (lines 101-144), which performs online multidimensional CAT across the 5 cortical/neuromodulatory domains (O, C, E, A, N) without MCMC bottlenecks by evaluating expected item Fisher Information I_i(theta_d) = a_i^2 * p_i(theta_d) * (1 - p_i(theta_d)) at the current trait estimate theta_d and combining it with a multi-domain coverage bonus (2 - count_d) * 2.5 to rapidly shrink posterior uncertainty across under-sampled dimensions."
+      }
+    },
+    {
+      "filename": "tran_phung_venkatesh_2014_thurstonian_boltzmann_machines.pdf",
+      "arxiv_id": "1408.0055",
+      "title": "Thurstonian Boltzmann Machines: Learning from Multiple Inequalities",
+      "authors": [
+        "Truyen Tran",
+        "Dinh Phung",
+        "Svetha Venkatesh"
+      ],
+      "year": 2014,
+      "journal_venue": "Proceedings of the 30th International Conference on Machine Learning (ICML) / arXiv",
+      "pdf_url": "https://arxiv.org/pdf/1408.0055.pdf",
+      "size_bytes": 1328909,
+      "pillar": "Thurstonian Comparative Judgment, Forced-Choice & Ordinal Gating",
+      "algorithmic_formulation": "Embeds Thurstone's Law of Comparative Judgment into latent energy-based Boltzmann architectures, mapping ordinal ratings, pairwise inequalities (u_i > u_j), and bundled forced-choice preferences onto continuous latent utility vectors u ~ N(W * h, Sigma) to eliminate idiosyncratic scale usage and ipsative distortion.",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.decompose_signal",
+          "NeuroPsychometricEngine.infer_neurodevelopmental_mask_probabilities"
+        ],
+        "implementation_details": "Informs the trade-off and gating probe architecture in item_bank_irt.json (e.g., Q1 abstract prior vs. sensory fact tradeoff, Q3 salience-coupled hyperfocus vs. routine chore completion, Q5 1-on-1 depth vs. crowd saturation, Q7 allostatic resonance vs. decoupled logic) and the Boltzmann softmax posterior over neurodevelopmental masks in infer_neurodevelopmental_mask_probabilities() (lines 146-189) and cortical 4D attractor basin indexing (lines 267-294)."
+      }
+    },
+    {
+      "filename": "colombi_giordano_gottard_iannario_2016_ordinal_responses_latent_uncertainty.pdf",
+      "arxiv_id": "1607.00882",
+      "title": "Modelling Ordinal Responses with Uncertainty: a Hierarchical Marginal Model with Latent Uncertainty components",
+      "authors": [
+        "Roberto Colombi",
+        "Sabrina Giordano",
+        "Anna Gottard",
+        "Maria Iannario"
+      ],
+      "year": 2016,
+      "journal_venue": "arXiv Preprint (stat.ME) / Computational Statistics & Data Analysis",
+      "pdf_url": "https://arxiv.org/pdf/1607.00882.pdf",
+      "size_bytes": 2948057,
+      "pillar": "Response-Bias, Evaluative Halo & Uncertainty De-Confounding",
+      "algorithmic_formulation": "Decomposes ordinal rating responses into a mixture/hierarchical marginal structure separating the substantive latent feeling/trait component from respondent uncertainty, evaluative halo, and extreme/lenient response style shifts.",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.decompose_signal"
+        ],
+        "implementation_details": "Provides the statistical foundation for Step 1 of decompose_signal() in science/engine/neuro_psychometrics.py (lines 219-236), which strips out the Allostatic State / Mood & Self-Criticism Halo S_state(mood_energy, self_criticism) weighted by domain-specific mood susceptibility lambda_d (e.g., lambda_N = 0.65, lambda_E = 0.48, lambda_C = 0.42 vs. mood-immune cortical invariants lambda_O = 0.08, lambda_A = 0.18) before estimating de-confounded trait posteriors y_debiased = clamp(y_raw - halo)."
+      }
+    },
+    {
+      "filename": "epskamp_maris_waldorp_borsboom_2016_network_psychometrics_irt_ising.pdf",
+      "arxiv_id": "1609.02818",
+      "title": "Network Psychometrics",
+      "authors": [
+        "Sacha Epskamp",
+        "Gunter K. J. Maris",
+        "Lourens J. Waldorp",
+        "Denny Borsboom"
+      ],
+      "year": 2016,
+      "journal_venue": "The Wiley Handbook of Psychometric Testing (2018), 953-986",
+      "pdf_url": "https://arxiv.org/pdf/1609.02818.pdf",
+      "size_bytes": 1063498,
+      "pillar": "Equivalence of IRT Latent Attractors and Markov Random Field Networks",
+      "algorithmic_formulation": "Proves the formal mathematical equivalence between multidimensional Item Response Theory (MIRT) and pairwise Markov Random Fields / Ising spin-glass energy landscapes P(y) = (1/Z) exp(sum_i tau_i y_i + sum_{i<j} omega_{ij} y_i y_j), where low-rank eigenvalue decomposition of the interaction matrix Omega yields latent continuous attractor dimensions and inverse temperature beta governs basin stability vs. entropy.",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.decompose_signal"
+        ],
+        "implementation_details": "Directly grounds Aura's 4D Cortical Inference Architecture (Observer Manifold) in decompose_signal() (lines 267-294): maps continuous de-confounded trait probabilities into a 16-basin discrete Ising attractor landscape (attractor_basin_index in {0..15}), computes pole clarity from distance to spin-flip boundaries |theta_k - 50|, and quantifies system temperature/uncertainty via normalized Shannon entropy H = -(1/4) sum_k [p_k log2(p_k) + (1-p_k) log2(1-p_k)]."
+      }
+    },
+    {
+      "filename": "epskamp_rhemtulla_borsboom_2016_generalized_network_psychometrics.pdf",
+      "arxiv_id": "1605.09288",
+      "title": "Generalized Network Psychometrics: Combining Network and Latent Variable Models",
+      "authors": [
+        "Sacha Epskamp",
+        "Mijke Rhemtulla",
+        "Denny Borsboom"
+      ],
+      "year": 2016,
+      "journal_venue": "Psychometrika, 82(4), 904-927 (2017)",
+      "pdf_url": "https://arxiv.org/pdf/1605.09288.pdf",
+      "size_bytes": 966524,
+      "pillar": "Hybrid Latent + Residual Network Decomposition (RNM / LNM)",
+      "algorithmic_formulation": "Introduces Latent Network Modeling (LNM) and Residual Network Modeling (RNM), decomposing observed covariance Sigma = Lambda * Psi * Lambda^T + Theta where either latent factors or residual item/facet interactions form a Gaussian Graphical Model (I - Omega)^{-1}. Separates shared structural baselines from unique residual profiles and direct facet-to-facet gating.",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.decompose_signal"
+        ],
+        "implementation_details": "Directly informs Aura's core 3-layer decomposition equation y_raw = B_wiring(mask) + Delta_P_unique + S_state(t) in decompose_signal() (lines 191-326). Once neurodevelopmental hardware priors B_wiring(mask) and state halos S_state(t) are accounted for, the engine isolates the Residual Personality vector Delta_P_unique = y_debiased - B_wiring (lines 242-247) and ranks the top unique divergences (lines 309-325), alongside gating sub-vectors (salience_vs_routine_split, sensory_overload_social_penalty, perceptual_gain_to_volatility_confound)."
+      }
+    },
+    {
+      "filename": "epskamp_waldorp_mottus_borsboom_2016_ggm_timeseries_within_between_person.pdf",
+      "arxiv_id": "1609.04156",
+      "title": "The Gaussian Graphical Model in Cross-sectional and Time-series Data",
+      "authors": [
+        "Sacha Epskamp",
+        "Lourens J. Waldorp",
+        "René Mõttus",
+        "Denny Borsboom"
+      ],
+      "year": 2016,
+      "journal_venue": "Multivariate Behavioral Research, 53(4), 453-480 (2018)",
+      "pdf_url": "https://arxiv.org/pdf/1609.04156.pdf",
+      "size_bytes": 705024,
+      "pillar": "Dynamical Systems & Within-Person State vs. Between-Person Trait Separation",
+      "algorithmic_formulation": "Formulates multilevel Graphical Vector Autoregression (mlVAR) for personality and affective time-series: y_{p,t} = mu_p + Beta_p (y_{p,t-1} - mu_p) + epsilon_{p,t}, explicitly partitioning observed variance into a stationary between-person trait attractor mu_p, a temporal lagged transition matrix Beta_p (attractor return rate / inertia), and a contemporaneous within-person state shock covariance Sigma_epsilon.",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.decompose_signal",
+          "NeuroPsychometricEngine.analyze_dyadic_chemistry"
+        ],
+        "implementation_details": "Provides the dynamical systems justification for separating stationary trait attractors (mu_p = B_wiring + Delta_P_unique) from transient within-person affective perturbations S_state(t) in decompose_signal(), and informs the cross-person allostatic coupling equations in analyze_dyadic_chemistry() (lines 373-452), where dyadic co-regulation depends on de-confounded cortical prior sync, allostatic safety, and salience-corrected execution bridges rather than noisy state-level snapshots."
+      }
+    },
+    {
+      "filename": "epskamp_borsboom_fried_2016_psychological_networks_accuracy.pdf",
+      "arxiv_id": "1604.08462",
+      "title": "Estimating Psychological Networks and their Accuracy: A Tutorial Paper",
+      "authors": [
+        "Sacha Epskamp",
+        "Denny Borsboom",
+        "Eiko I. Fried"
+      ],
+      "year": 2016,
+      "journal_venue": "Behavior Research Methods, 50(1), 195-212 (2018)",
+      "pdf_url": "https://arxiv.org/pdf/1604.08462.pdf",
+      "size_bytes": 735332,
+      "pillar": "Psychometric Uncertainty Quantification & Stability",
+      "algorithmic_formulation": "Establishes bootstrap and Bayesian precision intervals for psychological network parameters, centrality indices, and dimensional profiles, proving that point estimates of psychological constructs without confidence bands lead to spurious clinical and personality inferences.",
+      "neuro_psychometrics_mapping": {
+        "methods": [
+          "NeuroPsychometricEngine.score_responses_irt",
+          "NeuroPsychometricEngine.decompose_signal"
+        ],
+        "implementation_details": "Motivates Aura's explicit uncertainty quantification throughout science/engine/neuro_psychometrics.py: domain-level standard_errors and mean_confidence_band in score_responses_irt() (lines 91-99), pole_clarity_pct and shannon_entropy_bits in decompose_signal() (lines 283-294), and full softmax probability distributions across candidate neurodevelopmental masks in infer_neurodevelopmental_mask_probabilities() (lines 175-189)."
+      }
+    }
+  ]
+}

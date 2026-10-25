@@ -1,0 +1,120 @@
+{
+  "schema_version": "3.0.0",
+  "description": "Neurodevelopmental Modulatory Masks (B_wiring) with Blind Epistemic Double-Dissociation Signatures and calm, non-clinical user translations.",
+  "masks": [
+    {
+      "id": "adhd_dopamine_forager",
+      "name": "Interest-Based Nervous System (Dopamine-Foraging / Salience-Gated)",
+      "short_label": "Spark-Driven Rhythm",
+      "calm_title": "Spark-Driven Rhythm",
+      "calm_Badge": "Lit by Curiosity",
+      "calm_summary": "Your focus is powered by meaning, novelty, and genuine interest rather than routine obligation. Everyday checklists can feel surprisingly heavy, yet when a question or project truly captures your heart, your depth of focus is extraordinary.",
+      "calm_reframe": "Most personality tests mistake a dislike of routine errands for 'low discipline.' Once we separate routine chores from curiosity-driven work, your true follow-through is strong and deeply devoted.",
+      "badge": "Salience-Gated Mask",
+      "neural_mechanism": "Lower tonic prefrontal/striatal dopamine baseline paired with high-amplitude phasic bursts under novelty, urgency, or deep intrinsic interest. Action gating is salience-coupled rather than routine-coupled.",
+      "prior_offsets": {
+        "O": 14.0,
+        "C": -22.0,
+        "E": 6.0,
+        "A": 0.0,
+        "N": 10.0
+      },
+      "gating_reinterpretation": {
+        "salience_vs_routine_split": 34.0,
+        "sensory_overload_social_penalty": 4.0,
+        "perceptual_gain_to_volatility_confound": 8.0
+      },
+      "diagnostic_note": "Standard tests misread low routine chore completion (-22% C offset) as 'low conscientiousness.' De-confounding reveals high Salience-Locked Hyperfocus (+34% drive on high-interest problems)."
+    },
+    {
+      "id": "monotropic_sensory_precision",
+      "name": "Monotropic / High-Sensory-Precision (Deep-Tunnel Systemizer)",
+      "short_label": "Deep-Current Rhythm",
+      "calm_title": "Deep-Current Rhythm",
+      "calm_Badge": "Built for Depth",
+      "calm_summary": "You experience the world in high definition. Busy, overlapping rooms drain your energy quickly—not because you don't care about people, but because your mind naturally tunes in deeply to one conversation or idea at a time.",
+      "calm_reframe": "Traditional tests often confuse crowd fatigue with being 'distant.' In quiet, one-on-one spaces where you don't have to filter out background noise, your warmth and loyalty shine clearly.",
+      "badge": "High Sensory Precision",
+      "neural_mechanism": "Elevated bottom-up thalamocortical sensory precision (pi_sensory) and deep, narrow attention tunnels (Monotropism). High-entropy social environments trigger sensory saturation rather than social apathy.",
+      "prior_offsets": {
+        "O": 8.0,
+        "C": 10.0,
+        "E": -24.0,
+        "A": -12.0,
+        "N": 11.0
+      },
+      "gating_reinterpretation": {
+        "salience_vs_routine_split": 18.0,
+        "sensory_overload_social_penalty": 28.0,
+        "perceptual_gain_to_volatility_confound": 12.0
+      },
+      "diagnostic_note": "Standard tests misclassify sensory crowd-fatigue (-24% E) and direct communication (-12% A) as 'aloofness.' Masking isolates genuine 1-on-1 allostatic loyalty (+28% de-confounded social capacity)."
+    },
+    {
+      "id": "audhd_dual_attractor",
+      "name": "Dual-Attractor Paradox (Novelty Foraging × Sensory Sanctuary)",
+      "short_label": "Tides & Anchor Rhythm",
+      "calm_title": "Tides & Anchor Rhythm",
+      "calm_Badge": "Explorer & Sanctuary",
+      "calm_summary": "You hold a rare, creative balance inside you: one part of your mind craves fresh horizons, new ideas, and spontaneity, while another part needs a quiet, predictable sanctuary to feel grounded.",
+      "calm_reframe": "On ordinary personality tests, your love of novelty and your need for calm cancel each other out into a blurry middle score. Seeing both sides together honors how you actually move through the world.",
+      "badge": "Bimodal Paradox Mask",
+      "neural_mechanism": "Simultaneous prefrontal novelty foraging (dopamine-salience gating) and high bottom-up sensory precision requiring environmental predictability.",
+      "prior_offsets": {
+        "O": 16.0,
+        "C": -12.0,
+        "E": -14.0,
+        "A": -4.0,
+        "N": 14.0
+      },
+      "gating_reinterpretation": {
+        "salience_vs_routine_split": 36.0,
+        "sensory_overload_social_penalty": 22.0,
+        "perceptual_gain_to_volatility_confound": 14.0
+      },
+      "diagnostic_note": "Competing needs for novelty and order cancel out on linear tests. This mask unmasks bimodal high-entropy intellectual exploration paired with low-noise sensory protection."
+    },
+    {
+      "id": "hsp_high_gain_sensor",
+      "name": "High-Gain Perceptive & Allostatic Sensor (Deep Perceptual Resolution)",
+      "short_label": "Finely Tuned Rhythm",
+      "calm_title": "Finely Tuned Rhythm",
+      "calm_Badge": "High Perceptual Clarity",
+      "calm_summary": "You notice subtle shifts in tone, atmosphere, music, and emotion that others walk right past. Because you take in so much nuance, you feel both beauty and tension more vividly than most.",
+      "calm_reframe": "Most tests lump deep perceptiveness into 'worry' or 'stress.' Separating your natural attentiveness from stress shows a remarkably steady, perceptive core.",
+      "badge": "Amplified Signal Gain",
+      "neural_mechanism": "Amplified insula and mirror-network gain on subtle aesthetic, emotional, and interpersonal micro-signals.",
+      "prior_offsets": {
+        "O": 12.0,
+        "C": 4.0,
+        "E": -10.0,
+        "A": 14.0,
+        "N": 18.0
+      },
+      "gating_reinterpretation": {
+        "salience_vs_routine_split": 8.0,
+        "sensory_overload_social_penalty": 16.0,
+        "perceptual_gain_to_volatility_confound": 26.0
+      },
+      "diagnostic_note": "Standard Big Five tests dump high perceptual & empathic resolution straight into 'High Neuroticism' (+18% N offset). Masking separates signal sensitivity from emotional dysregulation."
+    },
+    {
+      "id": "canonical_allistic",
+      "name": "Canonical Allistic Baseline (Steady-Current Rhythm)",
+      "short_label": "Steady-Current Rhythm",
+      "calm_title": "Steady-Current Rhythm",
+      "calm_Badge": "Even Pace",
+      "calm_summary": "Your energy flows with a natural, even cadence across both everyday routines and shared social spaces. You don't have to fight steep internal friction just to switch between tasks or environments.",
+      "calm_reframe": "Because your baseline pace translates directly into everyday habits, your portrait reflects your preferences with very little hidden friction.",
+      "badge": "Unmasked Prior",
+      "neural_mechanism": "Standard tonic/phasic striatal dopamine gating with linear routine-to-action coupling and typical thalamocortical sensory attenuation.",
+      "prior_offsets": { "O": 0.0, "C": 0.0, "E": 0.0, "A": 0.0, "N": 0.0 },
+      "gating_reinterpretation": {
+        "salience_vs_routine_split": 4.0,
+        "sensory_overload_social_penalty": 4.0,
+        "perceptual_gain_to_volatility_confound": 4.0
+      },
+      "diagnostic_note": "Standard normative comparison with minimal neurodevelopmental mask offset."
+    }
+  ]
+}
