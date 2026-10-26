@@ -68,7 +68,7 @@ export function computePulseMetrics(
   postLureRtMs?: number
 ): PulseReactionTelemetry {
   const cleanRts = (reactionTimesMs || [])
-    .map((x) => Math.max(110, Math.min(2000, Number(x) || 272)))
+    .map((x) => Math.max(140, Math.min(860, Number(x) || 268)))
     .sort((a, b) => a - b);
 
   const fs = Math.max(0, Number(falseStarts) || 0);
@@ -490,7 +490,7 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
           setPulsePhase('lure');
           setPulseStatusText('VIOLET LURE · HOLD');
           setPulseSubText('Do NOT tap — testing impulse inhibition');
-          // Auto-succeed after 780ms if user holds still!
+          // Auto-succeed after 1150ms if user holds still!
           const holdT = window.setTimeout(() => {
             setTrialBadges((prev) => {
               const next = [...prev];
@@ -505,7 +505,7 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
               scheduleNextTrial(trialIdx + 1);
             }, 420);
             pulseTimersRef.current.push(nextT);
-          }, 780);
+          }, 1150);
           pulseTimersRef.current.push(holdT);
         } else {
           setPulsePhase('rippling');
@@ -580,7 +580,7 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
 
     if (pulsePhase === 'rippling') {
       clearTimerList(pulseTimersRef.current);
-      const rt = Math.max(110, Math.round(nowMs() - rippleShownAtRef.current));
+      const rt = Math.max(145, Math.min(840, Math.round(nowMs() - rippleShownAtRef.current)));
       pulseRtsRef.current.push(rt);
       if (pulseTrialIdx === 2) {
         postLureRtRef.current = rt;
@@ -1098,11 +1098,11 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
               className="mono"
               style={{
                 fontSize: '10px',
-                padding: '3px 8px',
+                padding: '3.5px 9px',
                 borderRadius: '999px',
-                background: 'rgba(251, 191, 36, 0.14)',
-                border: '1px solid rgba(251, 191, 36, 0.4)',
-                color: '#fbbf24',
+                background: 'rgba(15, 23, 42, 0.84)',
+                border: '1px solid rgba(251, 191, 36, 0.55)',
+                color: '#fde68a',
                 fontWeight: 600,
               }}
             >
@@ -1112,11 +1112,11 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
               className="mono"
               style={{
                 fontSize: '10px',
-                padding: '3px 8px',
+                padding: '3.5px 9px',
                 borderRadius: '999px',
-                background: 'rgba(167, 139, 250, 0.14)',
-                border: '1px solid rgba(167, 139, 250, 0.4)',
-                color: '#c4b5fd',
+                background: 'rgba(15, 23, 42, 0.84)',
+                border: '1px solid rgba(167, 139, 250, 0.55)',
+                color: '#ddd6fe',
                 fontWeight: 600,
               }}
             >
