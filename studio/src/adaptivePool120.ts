@@ -2753,27 +2753,40 @@ export function computeLiveDomainPosteriors(
     const t = telemetry as Record<string, any>;
     const pr = t.pulse_reaction;
     if (pr && pr.completed) {
-      if ((typeof pr.rt_cv_pct === 'number' && pr.rt_cv_pct >= 18) || (pr.false_starts ?? 0) >= 1) {
-        // Variable attentional cadence / dopamine foraging prior
-        priorShift.O += 0.22;
-        priorWeight.O += 0.35;
-        priorShift.C -= 0.28;
-        priorWeight.C += 0.45;
-      } else if (typeof pr.steadiness_pct === 'number' && pr.steadiness_pct >= 86) {
-        // Steady tonic executive control prior
-        priorShift.C += 0.24;
-        priorWeight.C += 0.40;
-        priorShift.N -= 0.16;
-        priorWeight.N += 0.30;
+      const lureAlarms = Number(pr.lure_false_alarms ?? 0);
+      const inhibitionPct = Number(pr.inhibition_score_pct ?? 100);
+      if (
+        (typeof pr.rt_cv_pct === 'number' && pr.rt_cv_pct >= 18) ||
+        (pr.false_starts ?? 0) >= 1 ||
+        lureAlarms >= 1 ||
+        inhibitionPct < 80
+      ) {
+        // Variable attentional cadence / dopamine foraging / Go-NoGo commission prior
+        priorShift.O += 0.24;
+        priorWeight.O += 0.38;
+        priorShift.C -= 0.30;
+        priorWeight.C += 0.48;
+        priorShift.E += 0.14;
+        priorWeight.E += 0.25;
+      } else if (typeof pr.steadiness_pct === 'number' && pr.steadiness_pct >= 86 && inhibitionPct >= 95) {
+        // Steady tonic executive control + clean prefrontal Go/No-Go inhibition prior
+        priorShift.C += 0.26;
+        priorWeight.C += 0.44;
+        priorShift.N -= 0.18;
+        priorWeight.N += 0.32;
       }
     }
     const cm = t.constellation_memory;
     if (cm && cm.completed && typeof cm.accuracy_pct === 'number') {
-      if (cm.accuracy_pct >= 80 && (cm.mean_chunk_ms ?? 450) <= 500) {
-        priorShift.O += 0.24;
-        priorWeight.O += 0.40;
-        priorShift.C += 0.12;
-        priorWeight.C += 0.25;
+      const distractorRes = Number(cm.distractor_resistance_pct ?? 100);
+      const planStyle = cm.planning_style || 'holistic_planner';
+      if (cm.accuracy_pct >= 80 && distractorRes >= 80) {
+        priorShift.O += 0.26;
+        priorWeight.O += 0.42;
+        if (planStyle === 'holistic_planner') {
+          priorShift.C += 0.18;
+          priorWeight.C += 0.30;
+        }
       }
     }
     const me = t.minds_eye;
@@ -2785,6 +2798,13 @@ export function computeLiveDomainPosteriors(
       } else if (me.imagery_vividness >= 80 || me.inner_modality === 'visual_cinema') {
         priorShift.O += 0.22;
         priorWeight.O += 0.35;
+      }
+      if (me.perceptual_focus === 'local_detail') {
+        priorShift.C += 0.14;
+        priorWeight.C += 0.22;
+      } else if (me.perceptual_focus === 'divergent_space' || me.perceptual_focus === 'global_gestalt') {
+        priorShift.O += 0.14;
+        priorWeight.O += 0.22;
       }
     }
   }

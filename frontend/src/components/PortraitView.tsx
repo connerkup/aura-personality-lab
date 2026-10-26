@@ -596,12 +596,17 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
           style={{ marginBottom: '16px' }}
         >
           <div className="compact-stat-row">
-            <span
-              style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 600 }}
-            >
-              Mind’s Eye
-            </span>
-            <strong id="moment-minds-eye-title" style={{ fontSize: '13.5px' }}>
+            <div>
+              <span
+                style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 600 }}
+              >
+                Inner Canvas · V1 &amp; Gestalt
+              </span>
+              <div className="mono" style={{ fontSize: '9.5px', color: 'var(--text-dim)' }}>
+                V1 Gain {tel?.imagery_vividness ?? 72}% · {(tel?.inner_modality || 'visual_cinema').replace('_', ' ')}
+              </div>
+            </div>
+            <strong id="moment-minds-eye-title" style={{ fontSize: '13px' }}>
               {cleanMindsEyeTitle}
             </strong>
             <span id="moment-minds-eye-desc" style={{ display: 'none' }}>
@@ -609,12 +614,17 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             </span>
           </div>
           <div className="compact-stat-row">
-            <span
-              style={{ fontSize: '11px', color: 'var(--sky)', fontWeight: 600 }}
-            >
-              Still Water
-            </span>
-            <strong id="moment-still-water-title" style={{ fontSize: '13.5px' }}>
+            <div>
+              <span
+                style={{ fontSize: '11px', color: 'var(--sky)', fontWeight: 600 }}
+              >
+                Still Water · Go / No-Go Tempo
+              </span>
+              <div className="mono" style={{ fontSize: '9.5px', color: 'var(--text-dim)' }}>
+                {tel?.median_rt_ms ?? 264}ms · {tel?.rt_steadiness_pct ?? 91}% Steadiness · Lure Hold
+              </div>
+            </div>
+            <strong id="moment-still-water-title" style={{ fontSize: '13px' }}>
               {tel?.attentional_cadence_label || 'Steady & Present'}
             </strong>
             <span id="moment-still-water-desc" style={{ display: 'none' }}>
@@ -622,16 +632,21 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             </span>
           </div>
           <div className="compact-stat-row">
-            <span
-              style={{
-                fontSize: '11px',
-                color: 'var(--amber)',
-                fontWeight: 600,
-              }}
-            >
-              Night Sky
-            </span>
-            <strong id="moment-night-sky-title" style={{ fontSize: '13.5px' }}>
+            <div>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--amber)',
+                  fontWeight: 600,
+                }}
+              >
+                Night Sky · Working Memory
+              </span>
+              <div className="mono" style={{ fontSize: '9.5px', color: 'var(--text-dim)' }}>
+                {tel?.memory_accuracy_pct ?? 100}% Span · {tel?.mean_chunk_ms ?? 420}ms Chunk · Decoy Filter
+              </div>
+            </div>
+            <strong id="moment-night-sky-title" style={{ fontSize: '13px' }}>
               {tel?.pattern_memory_label || 'Whole-Constellation Memory'}
             </strong>
             <span id="moment-night-sky-desc" style={{ display: 'none' }}>

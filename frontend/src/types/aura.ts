@@ -1,6 +1,9 @@
 export type DomainKey = 'O' | 'C' | 'E' | 'A' | 'N';
 
 export type InnerModality = 'wordless_concept' | 'inner_voice' | 'visual_cinema';
+export type PerceptualFocus = 'global_gestalt' | 'local_detail' | 'divergent_space';
+export type PrimarySense = 'visual_light' | 'tactile_warmth' | 'auditory_hum' | 'abstract_knowing';
+export type PlanningStyle = 'holistic_planner' | 'rapid_forager' | 'balanced_chunker';
 
 export interface PulseReactionTelemetry {
   completed: boolean;
@@ -8,18 +11,29 @@ export interface PulseReactionTelemetry {
   rt_cv_pct: number;
   steadiness_pct: number;
   false_starts: number;
+  lure_trials?: number;
+  lure_false_alarms?: number;
+  inhibition_score_pct?: number;
+  post_lure_rt_ms?: number;
 }
 
 export interface ConstellationMemoryTelemetry {
   completed: boolean;
   accuracy_pct: number;
   mean_chunk_ms: number;
+  planning_latency_ms?: number;
+  distractors_ignored?: number;
+  distractor_resistance_pct?: number;
+  planning_style?: PlanningStyle;
 }
 
 export interface MindsEyeTelemetry {
   completed: boolean;
   imagery_vividness: number;
   inner_modality: InnerModality;
+  perceptual_focus?: PerceptualFocus;
+  perceptual_rt_ms?: number;
+  primary_sense?: PrimarySense;
 }
 
 export interface TelemetryState {
