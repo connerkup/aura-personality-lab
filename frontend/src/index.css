@@ -310,14 +310,12 @@ html[data-aura-theme='dark'] .atmosphere-popover-card {
   text-transform: uppercase;
 }
 
-/* Welcome Screen (Open Translucent Atmosphere over WebGL Aurora) */
+/* Welcome Screen (Open Weightless Stage over WebGL Aurora) */
 .overlay-screen {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: var(--glass-bg);
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;

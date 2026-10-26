@@ -1055,12 +1055,13 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main App Shell */}
-      <div
-        className={`app-container ${activeTab === 'test' ? 'is-typeform-mode' : ''} ${
-          pureCanvasMode ? 'ui-hidden' : ''
-        }`}
-      >
+      {/* Main App Shell (Hidden while Welcome or Synthesis Loader is active so they never overlap) */}
+      {!welcomeVisible && !loaderVisible && (
+        <div
+          className={`app-container ${activeTab === 'test' ? 'is-typeform-mode' : ''} ${
+            pureCanvasMode ? 'ui-hidden' : ''
+          }`}
+        >
         {/* Whisper-thin top navigation ONLY shown on Portrait / Together / Guides */}
         {activeTab !== 'test' && (
           <header className="top-header">
@@ -1222,7 +1223,8 @@ export const App: React.FC = () => {
             onShowToast={showToast}
           />
         )}
-      </div>
+        </div>
+      )}
     </>
   );
 };
