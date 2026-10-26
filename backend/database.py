@@ -301,6 +301,21 @@ def init_db(engine: Optional[NeuroPsychometricEngine] = None) -> None:
                 );
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS blind_prediction_verifications (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    commitment_hash TEXT NOT NULL,
+                    total_items INTEGER NOT NULL,
+                    hits INTEGER NOT NULL,
+                    hit_rate_pct REAL NOT NULL,
+                    brier_score REAL NOT NULL,
+                    brier_skill_score REAL NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+                """
+            )
 
             # Seed / upgrade all 120 calibrated items from ADAPTIVE_ITEM_POOL_120
             pool_by_id = {int(it["id"]): it for it in ADAPTIVE_ITEM_POOL_120}
@@ -466,8 +481,182 @@ def init_db(engine: Optional[NeuroPsychometricEngine] = None) -> None:
                             now_str,
                         ),
                     )
+
+            # Seed blind_prediction_verifications with 18 realistic initial holdout records if empty
+            cur_v = conn2.execute("SELECT COUNT(*) AS cnt FROM blind_prediction_verifications;")
+            verif_count = int(cur_v.fetchone()["cnt"])
+            if verif_count == 0:
+                from science.models.oregon_escs_behavioral_matrix import generate_oregon_escs_cohort
+
+                cohort = generate_oregon_escs_cohort(seed=1994)
+                holdout_18 = [s for s in cohort if s["split"] == "blind_holdout_20"][:18]
+                now_str = _utc_now()
+                for idx_v, sub in enumerate(holdout_18):
+                    pred_out = engine.predict_behaviors_from_personality(
+                        raw_scores=sub["domain_scores"],
+                        aspect_scores=sub["aspect_scores"],
+                        telemetry=sub["telemetry"],
+                        top_k=5,
+                    )
+                    user_verif_map = {
+                        p["act_id"]: int(sub["observed_behaviors"][p["act_id"]])
+                        for p in pred_out["top_predictions"]
+                    }
+                    # Inject occasional realistic falsification on a few seeded sessions so Bayesian updates are visible
+                    if idx_v in (2, 5, 9, 13, 16) and pred_out["top_predictions"]:
+                        last_aid = pred_out["top_predictions"][-1]["act_id"]
+                        user_verif_map[last_aid] = 1 - int(pred_out["top_predictions"][-1]["predicted_binary"])
+
+                    scored = engine.score_user_blind_predictions(
+                        predictions=pred_out,
+                        user_verifications=user_verif_map,
+                        raw_scores=sub["domain_scores"],
+                        aspect_scores=sub["aspect_scores"],
+                    )
+                    vid = f"escs-verif-{idx_v + 1:03d}"
+                    payload_doc = {
+                        "id": vid,
+                        "subject_id": sub["subject_id"],
+                        "cohort_label": sub["cohort_label"],
+                        "scored_verification": scored,
+                    }
+                    conn2.execute(
+                        """
+                        INSERT OR REPLACE INTO blind_prediction_verifications (
+                            id, created_at, commitment_hash, total_items,
+                            hits, hit_rate_pct, brier_score, brier_skill_score, payload_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """,
+                        (
+                            vid,
+                            now_str,
+                            str(scored["commitment_hash"]),
+                            int(scored["total"]),
+                            int(scored["hits"]),
+                            float(scored["hit_rate_pct"]),
+                            float(scored["brier_score"]),
+                            float(scored["brier_skill_score"]),
+                            json.dumps(payload_doc),
+                        ),
+                    )
     finally:
         conn2.close()
+
+
+def save_blind_prediction_verification(
+    scored_result: Dict[str, Any],
+    verification_id: Optional[str] = None,
+    extra_meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    vid = verification_id or f"verif-{uuid.uuid4().hex[:10]}"
+    now_str = _utc_now()
+    commitment_hash = str(scored_result.get("commitment_hash") or "")
+    total_items = int(scored_result.get("total", 0))
+    hits = int(scored_result.get("hits", 0))
+    hit_rate_pct = float(scored_result.get("hit_rate_pct", 0.0))
+    brier_score = float(scored_result.get("brier_score", 0.25))
+    brier_skill_score = float(scored_result.get("brier_skill_score", 0.0))
+
+    payload_doc = {
+        "id": vid,
+        "created_at": now_str,
+        "scored_verification": scored_result,
+        **(extra_meta or {}),
+    }
+    conn = get_connection()
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO blind_prediction_verifications (
+                    id, created_at, commitment_hash, total_items,
+                    hits, hit_rate_pct, brier_score, brier_skill_score, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    vid,
+                    now_str,
+                    commitment_hash,
+                    total_items,
+                    hits,
+                    hit_rate_pct,
+                    brier_score,
+                    brier_skill_score,
+                    json.dumps(payload_doc),
+                ),
+            )
+    finally:
+        conn.close()
+
+    return {
+        "id": vid,
+        "created_at": now_str,
+        "commitment_hash": commitment_hash,
+        "total_items": total_items,
+        "hits": hits,
+        "hit_rate_pct": hit_rate_pct,
+        "brier_score": brier_score,
+        "brier_skill_score": brier_skill_score,
+    }
+
+
+def list_blind_prediction_verifications(limit: int = 50) -> List[Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM blind_prediction_verifications ORDER BY created_at DESC, id DESC LIMIT ?;",
+            (int(limit),),
+        ).fetchall()
+        results: List[Dict[str, Any]] = []
+        for r in rows:
+            try:
+                payload = json.loads(r["payload_json"])
+            except Exception:
+                payload = {}
+            results.append({
+                "id": r["id"],
+                "created_at": r["created_at"],
+                "commitment_hash": r["commitment_hash"],
+                "total_items": int(r["total_items"]),
+                "hits": int(r["hits"]),
+                "hit_rate_pct": float(r["hit_rate_pct"]),
+                "brier_score": float(r["brier_score"]),
+                "brier_skill_score": float(r["brier_skill_score"]),
+                "payload": payload,
+            })
+        return results
+    finally:
+        conn.close()
+
+
+def get_blind_prediction_verification_summary() -> Dict[str, Any]:
+    rows = list_blind_prediction_verifications(limit=250)
+    if not rows:
+        return {
+            "total_verified_sessions": 0,
+            "total_verified_items": 0,
+            "total_hits": 0,
+            "mean_hit_rate_pct": 0.0,
+            "mean_brier_score": 0.25,
+            "mean_brier_skill_score": 0.0,
+            "recent_verifications": [],
+        }
+    total_sessions = len(rows)
+    total_items = sum(int(r["total_items"]) for r in rows)
+    total_hits = sum(int(r["hits"]) for r in rows)
+    mean_hr = round((total_hits / max(1, total_items)) * 100.0, 1)
+    mean_brier = round(sum(float(r["brier_score"]) for r in rows) / total_sessions, 4)
+    mean_bss = round(sum(float(r["brier_skill_score"]) for r in rows) / total_sessions, 3)
+
+    return {
+        "total_verified_sessions": total_sessions,
+        "total_verified_items": total_items,
+        "total_hits": total_hits,
+        "mean_hit_rate_pct": mean_hr,
+        "mean_brier_score": mean_brier,
+        "mean_brier_skill_score": mean_bss,
+        "recent_verifications": rows[:25],
+    }
 
 
 def save_assessment_session(
@@ -534,12 +723,14 @@ def get_session_counts() -> Dict[str, int]:
         c2 = int(conn.execute("SELECT COUNT(*) AS cnt FROM shadow_telemetry;").fetchone()["cnt"])
         q_cnt = int(conn.execute("SELECT COUNT(*) AS cnt FROM questions WHERE active = 1;").fetchone()["cnt"])
         f_cnt = int(conn.execute("SELECT COUNT(*) AS cnt FROM assessment_flows;").fetchone()["cnt"])
+        v_cnt = int(conn.execute("SELECT COUNT(*) AS cnt FROM blind_prediction_verifications;").fetchone()["cnt"])
         return {
             "live_assessment_sessions": c1,
             "seeded_shadow_calibration_sessions": c2,
             "total_calibration_corpus": c1 + c2,
             "active_questions": q_cnt,
             "experimental_flows": f_cnt,
+            "blind_prediction_verifications": v_cnt,
         }
     finally:
         conn.close()

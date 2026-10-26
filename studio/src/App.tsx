@@ -14,6 +14,13 @@ import {
   selectNextAdaptiveQuestionClient,
 } from './adaptivePool120';
 import {
+  ASPECT_LABELS,
+  AspectKey,
+  getOregonHoldoutBenchmarkSummaryClient,
+  OREGON_BEHAVIORAL_ACTS_40,
+  predictPersonalityFromBehaviorsClient,
+} from './oregonBehavioralMatrix';
+import {
   AURA_SCIENCE_BUNDLE,
   CALM_DIMENSION_LABELS,
   getQuestionSlug,
@@ -209,6 +216,47 @@ export const StudioApp: React.FC = () => {
   );
   const [simResult, setSimResult] = useState<CohortSimulationResult | null>(null);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
+
+  // =========================================================================
+  // TAB 3 STATE: Oregon ESCS 80/20 Blind Holdout & "Glass-Box TikTok" Lab
+  // =========================================================================
+  const [oregonSubView, setOregonSubView] = useState<'both' | 'holdout' | 'tiktok'>('both');
+  const [tiktokSelectedActs, setTiktokSelectedActs] = useState<Record<string, boolean>>({
+    act_01: true, // 10+ Open Rabbit-Hole Tabs
+    act_08: true, // Reads Texts & Replies Mentally
+    act_22: true, // Stays Up Past 1 AM Researching
+    act_15: true, // Leaves Dishes Overnight
+    act_10: true, // Relief When Plans Cancel
+    act_29: true, // Never Uses Big Overhead Light
+  });
+  const [tiktokRtCvPct, setTiktokRtCvPct] = useState<number>(23.5);
+  const [tiktokChunkMs, setTiktokChunkMs] = useState<number>(372);
+  const [tiktokVividness, setTiktokVividness] = useState<number>(22);
+
+  const oregonBenchmark = useMemo(() => getOregonHoldoutBenchmarkSummaryClient(), []);
+  const tiktokFeaturedActs = useMemo(
+    () => OREGON_BEHAVIORAL_ACTS_40.filter((a) => a.tiktok_featured).slice(0, 14),
+    []
+  );
+  const tiktokInverseResult = useMemo(
+    () =>
+      predictPersonalityFromBehaviorsClient(tiktokSelectedActs, {
+        rt_cv_pct: tiktokRtCvPct,
+        steadiness_pct: Math.max(15, 100 - (tiktokRtCvPct - 6) * 1.85),
+        mean_chunk_ms: tiktokChunkMs,
+        accuracy_pct: tiktokChunkMs <= 390 ? 90 : 78,
+        imagery_vividness: tiktokVividness,
+        inner_modality: tiktokVividness <= 25 ? 'wordless_concept' : 'visual_cinema',
+      }),
+    [tiktokSelectedActs, tiktokRtCvPct, tiktokChunkMs, tiktokVividness]
+  );
+
+  const handleToggleTiktokHabit = useCallback((actId: string) => {
+    setTiktokSelectedActs((prev) => ({
+      ...prev,
+      [actId]: !prev[actId],
+    }));
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -2384,6 +2432,400 @@ export const StudioApp: React.FC = () => {
       {/* ===================================================================== */}
       {activeStudioTab === 'science' && (
         <section id="studio-panel-science" className="studio-panel">
+          {/* OREGON ESCS 80/20 BLIND HOLDOUT & "GLASS-BOX TIKTOK" BEHAVIORAL PREDICTION LAB */}
+          <div
+            id="studio-oregon-escs-lab"
+            data-testid="studio-oregon-escs-lab"
+            className="card-subtle"
+            style={{
+              marginBottom: '20px',
+              borderColor: 'rgba(52, 211, 153, 0.5)',
+              background: 'rgba(52, 211, 153, 0.05)',
+            }}
+          >
+            <div className="status-bar-row" style={{ marginBottom: '12px' }}>
+              <div>
+                <span
+                  className="mono"
+                  style={{ fontSize: '11px', color: 'var(--emerald)', fontWeight: 600 }}
+                >
+                  🔬 OREGON ESCS 80/20 BLIND HOLDOUT &amp; “GLASS-BOX TIKTOK” BEHAVIORAL PREDICTION LAB
+                </span>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginTop: '2px' }}>
+                  Bidirectional Validation: (1) Traits + Telemetry ➔ 40 Everyday Habits &amp; (2) Pure Everyday Habits ➔ 5 Domains &amp; 10 Aspects
+                </h3>
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setOregonSubView('both')}
+                  className="btn-ghost"
+                  style={{
+                    fontSize: '11px',
+                    borderColor: oregonSubView === 'both' ? 'var(--emerald)' : 'var(--border)',
+                    background: oregonSubView === 'both' ? 'rgba(52, 211, 153, 0.14)' : undefined,
+                  }}
+                >
+                  All Bidirectional View
+                </button>
+                <button
+                  id="btn-oregon-tab-holdout"
+                  type="button"
+                  onClick={() => setOregonSubView('holdout')}
+                  className="btn-ghost"
+                  style={{
+                    fontSize: '11px',
+                    borderColor: oregonSubView === 'holdout' ? 'var(--emerald)' : 'var(--border)',
+                    background: oregonSubView === 'holdout' ? 'rgba(52, 211, 153, 0.14)' : undefined,
+                  }}
+                >
+                  1. 80/20 Blind Holdout
+                </button>
+                <button
+                  id="btn-oregon-tab-tiktok"
+                  type="button"
+                  onClick={() => setOregonSubView('tiktok')}
+                  className="btn-ghost"
+                  style={{
+                    fontSize: '11px',
+                    borderColor: oregonSubView === 'tiktok' ? 'var(--sky)' : 'var(--border)',
+                    background: oregonSubView === 'tiktok' ? 'var(--sky-soft)' : undefined,
+                  }}
+                >
+                  2. “Glass-Box TikTok” Simulator
+                </button>
+              </div>
+            </div>
+
+            {/* SUB-CARD 1: 80/20 BLIND HOLDOUT BENCHMARK */}
+            {(oregonSubView === 'both' || oregonSubView === 'holdout') && (
+              <div
+                id="oregon-holdout-benchmark-card"
+                className="card-subtle"
+                style={{
+                  marginBottom: oregonSubView === 'both' ? '14px' : '0',
+                  background: 'rgba(0,0,0,0.34)',
+                  borderColor: 'rgba(52, 211, 153, 0.35)',
+                }}
+              >
+                <div className="status-bar-row" style={{ marginBottom: '8px' }}>
+                  <span className="mono" style={{ fontSize: '11px', color: 'var(--emerald)', fontWeight: 600 }}>
+                    1. 80/20 BLIND HOLDOUT BENCHMARK (N={oregonBenchmark.nTrain} TRAIN / N={oregonBenchmark.nHoldout} BLIND HOLDOUT = {oregonBenchmark.totalHoldoutCells.toLocaleString()} BEHAVIORAL CELLS)
+                  </span>
+                  <span className="status-pill emerald" style={{ fontSize: '10px' }}>
+                    Goldberg Eugene–Springfield Act-Frequency Inventory (40 Acts)
+                  </span>
+                </div>
+
+                <div className="grid-2col">
+                  {/* Direction 1 KPI Card */}
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(52, 211, 153, 0.28)',
+                    }}
+                  >
+                    <div className="mono" style={{ fontSize: '10.5px', color: 'var(--emerald)', marginBottom: '4px' }}>
+                      DIRECTION 1 · TRAITS + TELEMETRY ➔ CONCRETE BEHAVIORS
+                    </div>
+                    <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                      <div>
+                        <div className="mono" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--emerald)' }}>
+                          {oregonBenchmark.direction1_traitsToBehaviors.top5HitRatePct}% Top-5 Hit Rate
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          +{oregonBenchmark.direction1_traitsToBehaviors.telemetryLiftPct}% Telemetry Lift over self-report ({oregonBenchmark.direction1_traitsToBehaviors.selfReportOnlyHitRatePct}%)
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mono" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--sky)' }}>
+                          AUROC = {oregonBenchmark.direction1_traitsToBehaviors.auroc}
+                        </div>
+                        <div className="mono" style={{ fontSize: '12px', color: '#c4b5fd' }}>
+                          Brier Skill = +{oregonBenchmark.direction1_traitsToBehaviors.brierSkillScore.toFixed(2)} (BS={oregonBenchmark.direction1_traitsToBehaviors.brierScore})
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mono" style={{ fontSize: '10.5px', color: 'var(--text-dim)' }}>
+                       Category Hit Rates:{' '}
+                      {oregonBenchmark.direction1_traitsToBehaviors.categoryHitRates
+                        .map((c) => `${c.category.split(' ')[0]} ${c.hitRatePct}%`)
+                        .join(' · ')}
+                    </div>
+                  </div>
+
+                  {/* Direction 2 KPI Card */}
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(56, 189, 248, 0.32)',
+                    }}
+                  >
+                    <div className="mono" style={{ fontSize: '10.5px', color: 'var(--sky)', marginBottom: '4px' }}>
+                      DIRECTION 2 · PURE BEHAVIORS ➔ 5 DOMAINS &amp; 10 ASPECTS (ZERO PERSONALITY QUESTIONS)
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                      <span className="mono" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--sky)' }}>
+                        Mean r = {oregonBenchmark.direction2_behaviorsToPersonality.meanDomainR}
+                      </span>
+                      <span className="mono" style={{ fontSize: '11.5px', color: 'var(--emerald)' }}>
+                        10-Aspect Mean r = {oregonBenchmark.direction2_behaviorsToPersonality.meanAspectR} · MAE = {oregonBenchmark.direction2_behaviorsToPersonality.meanDomainMaePct}%
+                      </span>
+                    </div>
+                    <div className="mono" style={{ fontSize: '11px', color: 'var(--text)', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      {(['O', 'C', 'E', 'A', 'N'] as DomainKey[]).map((dk) => {
+                        const dRow = oregonBenchmark.direction2_behaviorsToPersonality.domains[dk];
+                        return (
+                          <span key={dk} style={{ background: 'rgba(0,0,0,0.35)', padding: '2px 7px', borderRadius: '6px' }}>
+                            <strong style={{ color: '#c4b5fd' }}>{dk}:</strong> r={dRow.r} (MAE {dRow.maePct}%)
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-CARD 2: INTERACTIVE "GLASS-BOX TIKTOK" INVERSE SIMULATOR */}
+            {(oregonSubView === 'both' || oregonSubView === 'tiktok') && (
+              <div
+                id="oregon-tiktok-inverse-simulator"
+                className="card-subtle"
+                style={{
+                  background: 'rgba(0,0,0,0.36)',
+                  borderColor: 'rgba(56, 189, 248, 0.42)',
+                }}
+              >
+                <div className="status-bar-row" style={{ marginBottom: '8px' }}>
+                  <div>
+                    <span className="mono" style={{ fontSize: '11px', color: 'var(--sky)', fontWeight: 600 }}>
+                      2. INTERACTIVE “GLASS-BOX TIKTOK” INVERSE SIMULATOR (PURE EVERYDAY BEHAVIORS + TELEMETRY ➔ PERSONALITY)
+                    </span>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Toggle concrete everyday habits below ({tiktokInverseResult.activeHabitCount} active) + tune Mind Moment telemetry—zero Likert personality questions asked:
+                    </div>
+                  </div>
+                  <span className="mono" style={{ fontSize: '11px', color: 'var(--emerald)' }}>
+                    Twin: {tiktokInverseResult.oregonTwin.subjectId} (r={tiktokInverseResult.oregonTwin.similarityR}) · {tiktokInverseResult.inferredRhythmMask.calmTitle}
+                  </span>
+                </div>
+
+                {/* 14 Clickable Everyday Habit Pills */}
+                <div
+                  id="tiktok-habit-toggles"
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '6px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  {tiktokFeaturedActs.map((act) => {
+                    const isSelected = Boolean(tiktokSelectedActs[act.id]);
+                    return (
+                      <button
+                        key={act.id}
+                        type="button"
+                        data-testid={`tiktok-habit-${act.id}`}
+                        onClick={() => handleToggleTiktokHabit(act.id)}
+                        className="btn-ghost"
+                        style={{
+                          padding: '5px 10px',
+                          fontSize: '11.5px',
+                          borderColor: isSelected ? 'var(--emerald)' : 'var(--border)',
+                          background: isSelected
+                            ? 'rgba(52, 211, 153, 0.16)'
+                            : 'rgba(255,255,255,0.02)',
+                          color: isSelected ? 'var(--text)' : 'var(--text-muted)',
+                          fontWeight: isSelected ? 600 : 400,
+                        }}
+                      >
+                        {isSelected ? '✓ ' : '+ '}
+                        {act.short_label}{' '}
+                        <span className="mono" style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+                          ({act.primary_domain})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Telemetry Sliders Row */}
+                <div
+                  className="grid-3col"
+                  style={{
+                    marginBottom: '12px',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.03)',
+                  }}
+                >
+                  <div>
+                    <div className="mono" style={{ fontSize: '10.5px', color: 'var(--sky)', marginBottom: '2px' }}>
+                      Still Water RT CV: {tiktokRtCvPct}% ({tiktokRtCvPct >= 21 ? 'Quick-Spark' : 'Steady'})
+                    </div>
+                    <input
+                      id="tiktok-slider-rt-cv"
+                      type="range"
+                      min={8}
+                      max={32}
+                      step={0.5}
+                      value={tiktokRtCvPct}
+                      onChange={(e) => setTiktokRtCvPct(Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <div className="mono" style={{ fontSize: '10.5px', color: 'var(--amber)', marginBottom: '2px' }}>
+                      Night Sky Chunk Speed: {tiktokChunkMs} ms
+                    </div>
+                    <input
+                      id="tiktok-slider-chunk-ms"
+                      type="range"
+                      min={290}
+                      max={520}
+                      step={5}
+                      value={tiktokChunkMs}
+                      onChange={(e) => setTiktokChunkMs(Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <div className="mono" style={{ fontSize: '10.5px', color: '#c4b5fd', marginBottom: '2px' }}>
+                      Inner Canvas Vividness: {tiktokVividness}% {tiktokVividness <= 25 ? '(Conceptual Boost)' : ''}
+                    </div>
+                    <input
+                      id="tiktok-slider-vividness"
+                      type="range"
+                      min={5}
+                      max={95}
+                      step={1}
+                      value={tiktokVividness}
+                      onChange={(e) => setTiktokVividness(Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                {/* Live Output: 5 Domains + 10 Aspects vs Top-10 Predicted Unseen Oregon Habits */}
+                <div className="grid-2col">
+                  {/* Left: Inferred 5 Big Five Domains & 10 DeYoung Aspects */}
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(0,0,0,0.32)',
+                      border: '1px solid rgba(167, 139, 250, 0.28)',
+                    }}
+                  >
+                    <div className="mono" style={{ fontSize: '10.5px', color: '#c4b5fd', marginBottom: '6px' }}>
+                      INFERRED 5 BIG FIVE DOMAINS &amp; 10 DEYOUNG ASPECTS (FROM BEHAVIORS ALONE)
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+                      {tiktokInverseResult.topBehavioralDrivers.map((drv) => (
+                        <div
+                          key={drv.domain}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '11.5px',
+                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                            paddingBottom: '3px',
+                          }}
+                        >
+                          <div>
+                            <strong>{drv.domainName}</strong>
+                            <span style={{ fontSize: '10.5px', color: 'var(--text-dim)', display: 'block' }}>
+                              {drv.driverSummary}
+                            </span>
+                          </div>
+                          <span className="mono" style={{ color: 'var(--emerald)', fontWeight: 700 }}>
+                            {Math.round(drv.percentile)}% <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>±{drv.se}%</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      className="mono"
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '4px 10px',
+                        fontSize: '10.5px',
+                      }}
+                    >
+                      {(Object.keys(ASPECT_LABELS) as AspectKey[]).map((ak) => (
+                        <div key={ak} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{ASPECT_LABELS[ak].short}:</span>
+                          <strong style={{ color: 'var(--sky)' }}>
+                            {Math.round(tiktokInverseResult.aspectScores[ak])}%
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Right: Top-10 Predicted Unseen Oregon Habits */}
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(0,0,0,0.32)',
+                      border: '1px solid rgba(52, 211, 153, 0.28)',
+                    }}
+                  >
+                    <div className="mono" style={{ fontSize: '10.5px', color: 'var(--emerald)', marginBottom: '6px' }}>
+                      TOP-10 PREDICTED UNSEEN OREGON HABITS (ZERO-SHOT BEHAVIORAL COMPLETION)
+                    </div>
+                    <div
+                      id="tiktok-unseen-predictions"
+                      style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
+                    >
+                      {tiktokInverseResult.unseenPredictedBehaviors.slice(0, 10).map((pred, idx) => (
+                        <div
+                          key={pred.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '11px',
+                            padding: '2px 0',
+                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          }}
+                        >
+                          <span style={{ color: 'var(--text)' }}>
+                            <span className="mono" style={{ color: 'var(--text-dim)' }}>
+                              {idx + 1}.
+                            </span>{' '}
+                            {pred.short_label}
+                          </span>
+                          <span
+                            className="mono"
+                            style={{
+                              fontSize: '10.5px',
+                              color:
+                                pred.predictedDirection === 'do_this'
+                                  ? 'var(--emerald)'
+                                  : 'var(--amber)',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {pred.predictedLabel} ({pred.confidencePct}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div
             className="card-subtle"
             style={{

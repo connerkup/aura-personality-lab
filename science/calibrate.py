@@ -21,6 +21,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from science.engine.neuro_psychometrics import NeuroPsychometricEngine
+from science.models.oregon_escs_behavioral_matrix import export_oregon_escs_matrix_json
 
 
 def load_papers_corpus(science_dir: Path) -> list:
@@ -116,7 +117,24 @@ def run_calibration_and_export() -> dict:
             f"est_irt_a={sh['estimated_irt_a']}, graduation_ready={sh['graduation_ready']}"
         )
 
-    # 4. Export compiled science bundle to science/dist/science_bundle.json
+    # 4. Verify Oregon ESCS 80/20 Bidirectional Blind Holdout Benchmark
+    oregon_matrix = export_oregon_escs_matrix_json()
+    oregon_bench = engine.evaluate_oregon_blind_holdout_benchmark()
+    d1 = oregon_bench["direction_1_traits_to_behaviors"]
+    d2 = oregon_bench["direction_2_behaviors_to_traits"]
+    print("\n[Verification 4] Oregon ESCS 80/20 Bidirectional Blind Holdout Benchmark (N=250, 2,000 Holdout Cells):")
+    print(
+        f"  Direction 1 (Traits+Telemetry -> 40 Acts): Top-5 Hit Rate={d1['top5_hit_rate_pct']}% "
+        f"(SR-Only={d1['top5_self_report_only_hit_rate_pct']}%, Lift=+{d1['telemetry_lift_pct']}%), "
+        f"AUROC={d1['auroc']}, Brier={d1['brier_score']} (BSS={d1['brier_skill_score']})"
+    )
+    print(
+        f"  Direction 2 (40 Acts+Telemetry -> Traits): Mean Domain r={d2['mean_domain_r']} "
+        f"(MAE={d2['mean_domain_mae_pct_pts']} pts), Mean Aspect r={d2['mean_aspect_r']} "
+        f"(MAE={d2['mean_aspect_mae_pct_pts']} pts)"
+    )
+
+    # 5. Export compiled science bundle to science/dist/science_bundle.json
     dist_dir = science_dir / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
     bundle = {
@@ -126,6 +144,8 @@ def run_calibration_and_export() -> dict:
         "cognitive_telemetry_priors": engine.telemetry_priors_schema,
         "telemetry_priors_schema": engine.telemetry_priors_schema,
         "shadow_calibration_stats": shadow_cal,
+        "oregon_escs_behavioral_matrix": oregon_matrix,
+        "oregon_holdout_benchmark": oregon_bench,
         "papers_corpus": papers_corpus,
     }
     bundle_path = dist_dir / "science_bundle.json"

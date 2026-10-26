@@ -5,6 +5,18 @@ import {
   selectNextAdaptiveQuestionClient,
 } from '../data/adaptivePool120';
 import {
+  AspectKey,
+  getOregonHoldoutBenchmarkSummaryClient,
+  InversePersonalityPredictionResult,
+  OregonHoldoutBenchmarkSummary,
+  PredictBehaviorsResult,
+  PredictedBehaviorItem,
+  predictBehaviorsFromPersonalityClient,
+  predictPersonalityFromBehaviorsClient,
+  ScoreBlindPredictionsResult,
+  scoreUserBlindPredictionsClient,
+} from '../data/oregonBehavioralMatrix';
+import {
   AURA_SCIENCE_BUNDLE,
   CALM_DIMENSION_LABELS,
   INITIAL_SHADOW_CALIBRATION_MATRIX,
@@ -1451,6 +1463,72 @@ export const AuraAPI = {
       })),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
+  },
+
+  async predictBehaviorsFromTraits(payload: {
+    domainScores: Record<DomainKey, number>;
+    aspectScores?: Partial<Record<AspectKey, number>> | null;
+    telemetry?: Partial<TelemetryState> | Partial<TelemetryProfile> | Record<string, unknown> | null;
+    topK?: number;
+  }): Promise<PredictBehaviorsResult> {
+    const localPred = predictBehaviorsFromPersonalityClient(payload);
+    if (this.backendConnected) {
+      try {
+        const res = await fetch('/api/v1/oregon/predict-behaviors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.topPredictions)) {
+            return { ...localPred, ...data };
+          }
+        }
+      } catch {
+        // Fallback to deterministic client engine
+      }
+    }
+    return localPred;
+  },
+
+  async verifyBlindPredictions(payload: {
+    predictions: PredictedBehaviorItem[];
+    userVerifications: Record<string, 'do_this' | 'rarely'>;
+  }): Promise<ScoreBlindPredictionsResult> {
+    const localScore = scoreUserBlindPredictionsClient(
+      payload.predictions,
+      payload.userVerifications
+    );
+    if (this.backendConnected) {
+      try {
+        const res = await fetch('/api/v1/oregon/verify-predictions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.hitRatePct === 'number') {
+            return { ...localScore, ...data };
+          }
+        }
+      } catch {
+        // Fallback to deterministic client engine
+      }
+    }
+    return localScore;
+  },
+
+  async predictPersonalityFromBehaviors(payload: {
+    selectedActMap: Record<string, boolean | number | 'do_this' | 'rarely'>;
+    telemetry?: Partial<TelemetryState> | Record<string, unknown> | null;
+  }): Promise<InversePersonalityPredictionResult> {
+    return predictPersonalityFromBehaviorsClient(payload.selectedActMap, payload.telemetry);
+  },
+
+  async getOregonHoldoutBenchmark(): Promise<OregonHoldoutBenchmarkSummary> {
+    return getOregonHoldoutBenchmarkSummaryClient();
   },
 };
 

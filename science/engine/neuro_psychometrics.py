@@ -11,12 +11,25 @@ while producing calm, zero-jargon human narratives for Tier-3 presentation.
 """
 
 from __future__ import annotations
+import hashlib
 import json
 import math
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import numpy as np
 from scipy import stats as scipy_stats
+
+from science.models.oregon_escs_behavioral_matrix import (
+    DEYOUNG_10_ASPECT_KEYS,
+    DEYOUNG_10_ASPECT_NAMES,
+    OREGON_ACTS_BY_CODE,
+    OREGON_ACTS_BY_ID,
+    OREGON_BEHAVIORAL_ACTS_40,
+    OREGON_CATEGORIES,
+    compute_act_probability,
+    extract_telemetry_z_features,
+    generate_oregon_escs_cohort,
+)
 
 
 DOMAIN_KEYS = ["O", "C", "E", "A", "N"]
@@ -54,6 +67,16 @@ class NeuroPsychometricEngine:
         else:
             self.telemetry_priors_schema = {}
 
+        oregon_path = self.models_dir / "oregon_escs_behavioral_matrix.json"
+        if oregon_path.exists():
+            with open(oregon_path, "r", encoding="utf-8") as f:
+                self.oregon_escs_schema = json.load(f)
+        else:
+            self.oregon_escs_schema = {
+                "schema_version": "1.0.0",
+                "behavioral_acts": OREGON_BEHAVIORAL_ACTS_40,
+            }
+
         self.domains_by_id: Dict[str, Dict[str, Any]] = {
             d["id"]: d for d in self.cortical_schema["domains"]
         }
@@ -63,6 +86,9 @@ class NeuroPsychometricEngine:
         self.items_by_id: Dict[int, Dict[str, Any]] = {
             int(item["id"]): item for item in self.item_bank_schema["items"]
         }
+        self.oregon_acts: List[Dict[str, Any]] = list(OREGON_BEHAVIORAL_ACTS_40)
+        self.oregon_acts_by_id: Dict[str, Dict[str, Any]] = dict(OREGON_ACTS_BY_ID)
+        self._cached_oregon_benchmark: Optional[Dict[str, Any]] = None
 
     @staticmethod
     def _clamp(val: float, low: float = 2.0, high: float = 98.0) -> float:
@@ -1669,4 +1695,1147 @@ class NeuroPsychometricEngine:
             "domain_distributions": domain_summary,
             "branch_trigger_diagnostics": branch_stats,
             "shadow_calibration_matrix": shadow_cal,
+        }
+
+    # ========================================================================
+    # Oregon ESCS Bidirectional Behavioral Prediction & Falsifiability Engine
+    # ========================================================================
+
+    @staticmethod
+    def _compute_auroc(probs: List[float], labels: List[int]) -> float:
+        """
+        Exact Area Under the ROC Curve (AUROC) via Wilcoxon-Mann-Whitney rank statistic.
+        """
+        if not probs or len(probs) != len(labels):
+            return 0.5
+        pos = [float(p) for p, y in zip(probs, labels) if int(y) == 1]
+        neg = [float(p) for p, y in zip(probs, labels) if int(y) == 0]
+        if not pos or not neg:
+            return 0.5
+        arr_p = np.asarray(pos, dtype=float)[:, None]
+        arr_n = np.asarray(neg, dtype=float)[None, :]
+        wins = float(np.sum(arr_p > arr_n)) + 0.5 * float(np.sum(np.isclose(arr_p, arr_n)))
+        return round(wins / float(len(pos) * len(neg)), 4)
+
+    def _resolve_domains_and_aspects(
+        self,
+        raw_scores: Optional[Dict[str, float]] = None,
+        aspect_scores: Optional[Dict[str, float]] = None,
+        telemetry: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Dict[str, float]]:
+        clean_domains: Dict[str, float] = {}
+        for d in DOMAIN_KEYS:
+            val = (raw_scores or {}).get(d, 50.0) if isinstance(raw_scores, dict) else 50.0
+            clean_domains[d] = round(self._clamp(float(val if val is not None else 50.0), 2.0, 98.0), 1)
+
+        decomp_full = self.decompose_signal(raw_scores=clean_domains, telemetry=telemetry)
+        decomp_sr = self.decompose_signal(raw_scores=clean_domains, telemetry=None)
+
+        full_aspects = dict(decomp_full["deyoung_10_aspects"])
+        sr_aspects = dict(decomp_sr["deyoung_10_aspects"])
+
+        if aspect_scores and isinstance(aspect_scores, dict):
+            for a in DEYOUNG_10_ASPECT_KEYS:
+                if a in aspect_scores and aspect_scores[a] is not None:
+                    clamped_a = round(self._clamp(float(aspect_scores[a]), 2.0, 98.0), 1)
+                    full_aspects[a] = clamped_a
+                    sr_aspects[a] = clamped_a
+
+        return {
+            "domains": clean_domains,
+            "aspects_full": full_aspects,
+            "aspects_self_report": sr_aspects,
+        }
+
+    def predict_behaviors_from_personality(
+        self,
+        raw_scores: Optional[Dict[str, float]] = None,
+        aspect_scores: Optional[Dict[str, float]] = None,
+        telemetry: Optional[Dict[str, Any]] = None,
+        context_profile: Optional[Dict[str, Any]] = None,
+        top_k: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Direction 1 (`Personality + Telemetry ➔ Concrete Everyday Behaviors`):
+          - Computes calibrated probability p_j in [0.06, 0.95] for all 40 Oregon ESCS behavioral acts
+            using the subject's 5 domains, 10 DeYoung aspects, and Mind Moment telemetry.
+          - Computes self-report-only probability p_{j,sr} (without telemetry) to quantify Telemetry Lift (Delta p_j).
+          - Selects `top_k` (default 5, or up to 40) highest-information predictions across diverse categories,
+            balancing high-probability positive predictions (`"do_this"`, p_j >= 0.68) and high-confidence
+            negative predictions (`"rarely"`, p_j <= 0.32, i.e., 1 - p_j >= 0.68 confidence) so base rates cannot game the test.
+          - Generates a deterministic SHA-256 pre-commitment hash (`commitment_hash`) over the locked predictions.
+          - Finds the Top-3 Nearest Oregon ESCS Holdout Twins (`nearest_oregon_twins`) by 10-aspect Pearson/cosine similarity.
+        """
+        resolved = self._resolve_domains_and_aspects(
+            raw_scores=raw_scores,
+            aspect_scores=aspect_scores,
+            telemetry=telemetry,
+        )
+        clean_domains = resolved["domains"]
+        full_aspects = resolved["aspects_full"]
+        sr_aspects = resolved["aspects_self_report"]
+        tel_z = extract_telemetry_z_features(telemetry)
+        tel_provided = bool(tel_z.get("provided", 0.0) > 0.0)
+
+        all_predictions: List[Dict[str, Any]] = []
+        for act in OREGON_BEHAVIORAL_ACTS_40:
+            p_full = compute_act_probability(
+                act=act,
+                domain_scores=clean_domains,
+                aspect_scores=full_aspects,
+                telemetry=telemetry if tel_provided else None,
+                include_telemetry=tel_provided,
+            )
+            p_sr = compute_act_probability(
+                act=act,
+                domain_scores=clean_domains,
+                aspect_scores=sr_aspects,
+                telemetry=None,
+                include_telemetry=False,
+            )
+            base_rate = float(act["base_rate"])
+            delta_p = p_full - p_sr
+
+            pred_dir = "do_this" if p_full >= 0.50 else "rarely"
+            pred_bin = 1 if p_full >= 0.50 else 0
+            conf = p_full if p_full >= 0.50 else (1.0 - p_full)
+
+            sr_dir = "do_this" if p_sr >= 0.50 else "rarely"
+            sr_conf = p_sr if p_sr >= 0.50 else (1.0 - p_sr)
+
+            lift_over_base = abs(p_full - base_rate)
+            info_score = conf * 0.72 + lift_over_base * 0.28
+
+            # Identify top contributing aspect/telemetry signals for this user & act
+            drivers: List[Dict[str, Any]] = []
+            for a_key, w_a in act["aspect_weights"].items():
+                if abs(float(w_a)) < 0.15:
+                    continue
+                z_a = (float(full_aspects.get(a_key, 50.0)) - 50.0) / 18.0
+                contrib = float(w_a) * z_a
+                if abs(contrib) >= 0.12:
+                    drivers.append({
+                        "source": a_key,
+                        "label": DEYOUNG_10_ASPECT_NAMES.get(a_key, a_key),
+                        "log_odds_impact": round(contrib, 3),
+                    })
+            if tel_provided:
+                for t_key, w_t in act["telemetry_weights"].items():
+                    t_val = float(tel_z.get(t_key, 0.0))
+                    contrib_t = float(w_t) * t_val
+                    if abs(contrib_t) >= 0.08:
+                        drivers.append({
+                            "source": f"telemetry:{t_key}",
+                            "label": f"Mind Moment ({t_key})",
+                            "log_odds_impact": round(contrib_t, 3),
+                        })
+            drivers.sort(key=lambda d_it: abs(d_it["log_odds_impact"]), reverse=True)
+
+            all_predictions.append({
+                "act_id": act["act_id"],
+                "code": act["code"],
+                "category": act["category"],
+                "short_label": act["short_label"],
+                "text": act["text"],
+                "base_rate": round(base_rate, 3),
+                "base_rate_pct": round(base_rate * 100.0, 1),
+                "probability": round(p_full, 4),
+                "probability_pct": round(p_full * 100.0, 1),
+                "self_report_only_probability": round(p_sr, 4),
+                "self_report_only_pct": round(p_sr * 100.0, 1),
+                "telemetry_lift": round(delta_p, 4),
+                "telemetry_lift_pct": round(delta_p * 100.0, 1),
+                "predicted_direction": pred_dir,
+                "predicted_binary": pred_bin,
+                "predicted_label": "Likely Do This" if pred_dir == "do_this" else "Rarely / Not You",
+                "confidence": round(conf, 4),
+                "confidence_pct": round(conf * 100.0, 1),
+                "self_report_only_direction": sr_dir,
+                "self_report_only_confidence": round(sr_conf, 4),
+                "lift_over_base_rate": round(lift_over_base, 4),
+                "lift_over_base_rate_pct": round(lift_over_base * 100.0, 1),
+                "information_score": round(info_score, 4),
+                "primary_domain": act["primary_domain"],
+                "primary_aspect": act["primary_aspect"],
+                "primary_aspect_label": act["primary_aspect_label"],
+                "oregon_empirical_r": act["oregon_empirical_r"],
+                "rationale": act["rationale"],
+                "top_contributing_signals": drivers[:3],
+            })
+
+        # Select top_k highest-information predictions across diverse categories and both directions
+        k_clamped = max(1, min(len(all_predictions), int(top_k)))
+        sorted_by_info = sorted(
+            all_predictions,
+            key=lambda x: (x["information_score"], x["confidence"], x["lift_over_base_rate"]),
+            reverse=True,
+        )
+
+        if k_clamped >= len(all_predictions):
+            selected_top = sorted_by_info
+        else:
+            selected_top: List[Dict[str, Any]] = []
+            used_ids = set()
+            cat_counts: Dict[str, int] = {}
+
+            pos_candidates = [x for x in sorted_by_info if x["predicted_direction"] == "do_this"]
+            neg_candidates = [x for x in sorted_by_info if x["predicted_direction"] == "rarely"]
+
+            # Seed with highest-information positive and negative predictions if confident
+            if pos_candidates and pos_candidates[0]["confidence"] >= 0.58:
+                first_pos = pos_candidates[0]
+                selected_top.append(first_pos)
+                used_ids.add(first_pos["act_id"])
+                cat_counts[first_pos["category"]] = cat_counts.get(first_pos["category"], 0) + 1
+
+            if len(selected_top) < k_clamped and neg_candidates and neg_candidates[0]["confidence"] >= 0.58:
+                # Prefer a negative candidate from a different category if equally strong
+                chosen_neg = next(
+                    (
+                        c
+                        for c in neg_candidates
+                        if c["act_id"] not in used_ids
+                        and cat_counts.get(c["category"], 0) == 0
+                        and c["confidence"] >= neg_candidates[0]["confidence"] - 0.04
+                    ),
+                    neg_candidates[0],
+                )
+                if chosen_neg["act_id"] not in used_ids:
+                    selected_top.append(chosen_neg)
+                    used_ids.add(chosen_neg["act_id"])
+                    cat_counts[chosen_neg["category"]] = cat_counts.get(chosen_neg["category"], 0) + 1
+
+            # Pass 1: Max 1 per category for diverse coverage
+            for cand in sorted_by_info:
+                if len(selected_top) >= k_clamped:
+                    break
+                if cand["act_id"] in used_ids:
+                    continue
+                if cat_counts.get(cand["category"], 0) < 1:
+                    selected_top.append(cand)
+                    used_ids.add(cand["act_id"])
+                    cat_counts[cand["category"]] = cat_counts.get(cand["category"], 0) + 1
+
+            # Pass 2: Max 2 per category if needed
+            for cand in sorted_by_info:
+                if len(selected_top) >= k_clamped:
+                    break
+                if cand["act_id"] in used_ids:
+                    continue
+                if cat_counts.get(cand["category"], 0) < 2:
+                    selected_top.append(cand)
+                    used_ids.add(cand["act_id"])
+                    cat_counts[cand["category"]] = cat_counts.get(cand["category"], 0) + 1
+
+            # Pass 3: Fill any remaining slots unconditionally
+            for cand in sorted_by_info:
+                if len(selected_top) >= k_clamped:
+                    break
+                if cand["act_id"] not in used_ids:
+                    selected_top.append(cand)
+                    used_ids.add(cand["act_id"])
+
+            selected_top.sort(
+                key=lambda x: (x["information_score"], x["confidence"], x["lift_over_base_rate"]),
+                reverse=True,
+            )
+
+        # Compute deterministic SHA-256 pre-commitment hash over locked predictions
+        canonical_payload = [
+            {
+                "act_id": item["act_id"],
+                "code": item["code"],
+                "predicted_direction": item["predicted_direction"],
+                "probability": round(float(item["probability"]), 4),
+            }
+            for item in selected_top
+        ]
+        canonical_json = json.dumps(canonical_payload, sort_keys=True, separators=(",", ":"))
+        commitment_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+        # Find Top-3 Nearest Oregon ESCS Holdout Twins by 10-Aspect Pearson & Cosine Similarity
+        cohort = generate_oregon_escs_cohort(seed=1994)
+        holdout_pool = [sub for sub in cohort if sub["split"] == "blind_holdout_20"]
+        user_asp_vec = np.asarray([float(full_aspects[a]) - 50.0 for a in DEYOUNG_10_ASPECT_KEYS], dtype=float)
+        user_norm = float(np.linalg.norm(user_asp_vec))
+        user_centered = user_asp_vec - float(np.mean(user_asp_vec))
+        user_c_norm = float(np.linalg.norm(user_centered))
+
+        twin_candidates: List[Dict[str, Any]] = []
+        for sub in holdout_pool:
+            sub_asp_vec = np.asarray([float(sub["aspect_scores"][a]) - 50.0 for a in DEYOUNG_10_ASPECT_KEYS], dtype=float)
+            sub_norm = float(np.linalg.norm(sub_asp_vec))
+            cos_sim = float(np.dot(user_asp_vec, sub_asp_vec) / (user_norm * sub_norm)) if (user_norm > 1e-6 and sub_norm > 1e-6) else 0.0
+
+            sub_centered = sub_asp_vec - float(np.mean(sub_asp_vec))
+            sub_c_norm = float(np.linalg.norm(sub_centered))
+            r_sim = float(np.dot(user_centered, sub_centered) / (user_c_norm * sub_c_norm)) if (user_c_norm > 1e-6 and sub_c_norm > 1e-6) else cos_sim
+
+            rms_dist = float(np.sqrt(np.mean((user_asp_vec - sub_asp_vec) ** 2)))
+            combined_sim = 0.60 * cos_sim + 0.40 * max(-1.0, 1.0 - rms_dist / 25.0)
+
+            twin_candidates.append({
+                "subject": sub,
+                "similarity_r": round(max(cos_sim, r_sim), 3),
+                "cosine_similarity": round(cos_sim, 3),
+                "combined_sim": combined_sim,
+                "rms_distance_pct": round(rms_dist, 1),
+            })
+
+        holdout_twins = sorted(
+            twin_candidates,
+            key=lambda x: x["combined_sim"],
+            reverse=True,
+        )
+        nearest_oregon_twins: List[Dict[str, Any]] = []
+        for t in holdout_twins[:3]:
+            sub = t["subject"]
+            enacted_labels = [
+                OREGON_ACTS_BY_ID[aid]["short_label"]
+                for aid in [p["act_id"] for p in selected_top]
+                if sub["observed_behaviors"].get(aid, 0) == 1 and aid in OREGON_ACTS_BY_ID
+            ]
+            if len(enacted_labels) < 3:
+                for aid, val in sub["observed_behaviors"].items():
+                    if val == 1 and aid in OREGON_ACTS_BY_ID:
+                        lbl = OREGON_ACTS_BY_ID[aid]["short_label"]
+                        if lbl not in enacted_labels:
+                            enacted_labels.append(lbl)
+                        if len(enacted_labels) >= 3:
+                            break
+            nearest_oregon_twins.append({
+                "subject_id": sub["subject_id"],
+                "split": sub["split"],
+                "age": sub["age"],
+                "cohort_label": sub["cohort_label"],
+                "similarity_r": t["similarity_r"],
+                "cosine_similarity": t["cosine_similarity"],
+                "match_pct": round(self._clamp(50.0 + t["combined_sim"] * 48.0, 55.0, 99.0), 1),
+                "rms_distance_pct": t["rms_distance_pct"],
+                "domain_scores": sub["domain_scores"],
+                "aspect_scores": sub["aspect_scores"],
+                "signature_acts": enacted_labels[:3],
+            })
+
+        mean_abs_lift = float(np.mean([abs(p["telemetry_lift_pct"]) for p in selected_top])) if selected_top else 0.0
+        max_lift = float(max([abs(p["telemetry_lift_pct"]) for p in all_predictions], default=0.0))
+
+        return {
+            "direction": "traits_to_behaviors",
+            "commitment_hash": commitment_hash,
+            "commitment_algorithm": "SHA-256",
+            "commitment_canonical_json": canonical_json,
+            "top_k": k_clamped,
+            "predictions": selected_top,
+            "top_predictions": selected_top,
+            "all_40_predictions": sorted_by_info,
+            "input_domain_scores": clean_domains,
+            "input_aspect_scores": full_aspects,
+            "telemetry_summary": {
+                "telemetry_provided": tel_provided,
+                "mean_top_k_telemetry_lift_pct": round(mean_abs_lift, 2),
+                "max_telemetry_lift_pct": round(max_lift, 2),
+                "telemetry_z_features": tel_z,
+            },
+            "nearest_oregon_twins": nearest_oregon_twins,
+        }
+
+    def predict_personality_from_behaviors(
+        self,
+        observed_behaviors: Dict[str, Any],
+        telemetry: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Direction 2 (`Pure Everyday Behaviors + Telemetry ➔ 5 Domains & 10 DeYoung Aspects` — "Glass-Box TikTok" Mode):
+          - Given a dictionary of concrete behavioral acts (`{"escs_act_01": 1, "escs_act_04": 0, ...}` where values
+            can be binary `0/1`, boolean, or Likert `1..5`) plus optional Mind Moment telemetry:
+          - Combines Ridge-regularized Bayesian inversion of the Oregon ESCS cross-covariance matrix,
+            structural log-odds prior inversion, and k-NN collaborative filtering over the 200 Oregon
+            training subjects (`train_80`) to infer:
+              * Predicted 5 Big Five Domain scores (`predicted_domains`: O, C, E, A, N in 0..100) with posterior `se_domains`
+              * Predicted 10 DeYoung Aspect scores (`predicted_aspects` in 0..100) with posterior `se_aspects`
+              * Top contributing behavioral signals per domain (`top_behavioral_drivers`)
+              * Nearest Oregon ESCS behavioral twin profiles (`nearest_oregon_twins`).
+        """
+        # 1. Normalize observed behaviors into {act_id: float in [0.0, 1.0]}
+        clean_obs: Dict[str, float] = {}
+        if observed_behaviors and isinstance(observed_behaviors, dict):
+            for raw_k, raw_v in observed_behaviors.items():
+                if raw_v is None:
+                    continue
+                k_str = str(raw_k).strip()
+                act_meta = OREGON_ACTS_BY_ID.get(k_str) or OREGON_ACTS_BY_CODE.get(k_str.upper())
+                if not act_meta:
+                    continue
+                aid = act_meta["act_id"]
+
+                if isinstance(raw_v, bool):
+                    val = 1.0 if raw_v else 0.0
+                elif isinstance(raw_v, dict):
+                    b_val = raw_v.get("binary", raw_v.get("value", 0))
+                    val = 1.0 if float(b_val) >= 0.5 else 0.0
+                elif isinstance(raw_v, str):
+                    low_s = raw_v.strip().lower()
+                    if low_s in ("1", "true", "yes", "do_this", "likely", "often"):
+                        val = 1.0
+                    elif low_s in ("0", "false", "no", "rarely", "never"):
+                        val = 0.0
+                    else:
+                        try:
+                            f_v = float(low_s)
+                            val = (f_v - 1.0) / 4.0 if f_v > 1.0 else float(np.clip(f_v, 0.0, 1.0))
+                        except Exception:
+                            continue
+                else:
+                    f_v = float(raw_v)
+                    if f_v > 1.0:
+                        val = float(np.clip((f_v - 1.0) / 4.0, 0.0, 1.0))
+                    else:
+                        val = float(np.clip(f_v, 0.0, 1.0))
+
+                clean_obs[aid] = round(val, 4)
+
+        tel_z = extract_telemetry_z_features(telemetry)
+        tel_provided = bool(tel_z.get("provided", 0.0) > 0.0)
+        cohort = generate_oregon_escs_cohort(seed=1994)
+        train_cohort = [s for s in cohort if s["split"] == "train_80"]
+
+        obs_act_ids = sorted(clean_obs.keys())
+        n_obs = len(obs_act_ids)
+
+        if n_obs == 0 and not tel_provided:
+            neutral_dom = {d: 50.0 for d in DOMAIN_KEYS}
+            neutral_asp = {a: 50.0 for a in DEYOUNG_10_ASPECT_KEYS}
+            return {
+                "direction": "behaviors_to_traits",
+                "observed_act_count": 0,
+                "telemetry_provided": False,
+                "predicted_domains": neutral_dom,
+                "se_domains": {d: 16.5 for d in DOMAIN_KEYS},
+                "predicted_aspects": neutral_asp,
+                "se_aspects": {a: 17.5 for a in DEYOUNG_10_ASPECT_KEYS},
+                "top_behavioral_drivers": {d: [] for d in DOMAIN_KEYS},
+                "top_behavioral_drivers_list": [],
+                "nearest_oregon_twins": [],
+            }
+
+        # 2. Structural Bayesian Log-Odds Score Update from `OREGON_BEHAVIORAL_ACTS_40` weights
+        prior_domains: Dict[str, float] = {}
+        prior_aspects: Dict[str, float] = {}
+        se_domains: Dict[str, float] = {}
+        se_aspects: Dict[str, float] = {}
+
+        tel_keys = ["rt_cv_z", "steadiness_z", "chunk_speed_z", "imagery_vividness_z", "wordless_concept_bonus"]
+
+        for d in DOMAIN_KEYS:
+            num = 0.0
+            info_sum = 0.38 + (0.28 if tel_provided else 0.0)
+            for aid in obs_act_ids:
+                act = OREGON_ACTS_BY_ID[aid]
+                w_d = float(act["domain_weights"].get(d, 0.0))
+                p0 = float(act["base_rate"])
+                resid = clean_obs[aid] - p0
+                num += w_d * resid
+                info_sum += (w_d ** 2) * p0 * (1.0 - p0)
+            z_hat = num / max(1.15, info_sum * 0.58)
+            prior_domains[d] = float(np.clip(50.0 + z_hat * 18.5, 5.0, 96.0))
+            se_domains[d] = round(float(np.clip(15.5 / math.sqrt(max(0.5, info_sum)), 3.2, 16.5)), 1)
+
+        for a in DEYOUNG_10_ASPECT_KEYS:
+            parent_d = a.split("_")[0]
+            num_a = 0.0
+            info_a = 0.35 + (0.24 if tel_provided else 0.0)
+            for aid in obs_act_ids:
+                act = OREGON_ACTS_BY_ID[aid]
+                w_a = float(act["aspect_weights"].get(a, 0.0))
+                w_d = float(act["domain_weights"].get(parent_d, 0.0))
+                w_eff = 0.78 * w_a + 0.22 * w_d
+                p0 = float(act["base_rate"])
+                resid = clean_obs[aid] - p0
+                num_a += w_eff * resid
+                info_a += (w_eff ** 2) * p0 * (1.0 - p0)
+            z_a_hat = num_a / max(1.10, info_a * 0.56)
+            prior_aspects[a] = float(np.clip(50.0 + z_a_hat * 18.5, 5.0, 96.0))
+            se_aspects[a] = round(float(np.clip(16.2 / math.sqrt(max(0.5, info_a)), 3.5, 17.5)), 1)
+
+        # 3. Ridge-Regularized Bayesian Cross-Covariance Inversion + k-NN over 200 `train_80` subjects
+        n_train = len(train_cohort)
+        feat_rows: List[List[float]] = []
+        target_rows: List[List[float]] = []
+
+        for sub in train_cohort:
+            row_f: List[float] = [float(sub["observed_behaviors"][aid]) for aid in obs_act_ids]
+            if tel_provided:
+                sub_tz = extract_telemetry_z_features(sub["telemetry"])
+                for tk in tel_keys:
+                    row_f.append(float(sub_tz.get(tk, 0.0)) * 0.35)
+            feat_rows.append(row_f)
+
+            row_y: List[float] = [float(sub["domain_scores"][d]) for d in DOMAIN_KEYS] + [
+                float(sub["aspect_scores"][a]) for a in DEYOUNG_10_ASPECT_KEYS
+            ]
+            target_rows.append(row_y)
+
+        user_f: List[float] = [float(clean_obs[aid]) for aid in obs_act_ids]
+        if tel_provided:
+            for tk in tel_keys:
+                user_f.append(float(tel_z.get(tk, 0.0)) * 0.35)
+
+        X_train = np.asarray(feat_rows, dtype=float)
+        Y_train = np.asarray(target_rows, dtype=float)
+        x_user = np.asarray(user_f, dtype=float)
+
+        mu_X = np.mean(X_train, axis=0)
+        mu_Y = np.mean(Y_train, axis=0)
+        X_c = X_train - mu_X
+        Y_c = Y_train - mu_Y
+        x_u_c = x_user - mu_X
+
+        p_dim = X_train.shape[1]
+        lam = 9.5 + 16.0 * max(0.0, 1.0 - float(n_obs) / 20.0)
+        gram = X_c.T @ X_c + lam * np.eye(p_dim)
+        W_ridge = np.linalg.solve(gram, X_c.T @ Y_c)
+        y_ridge = mu_Y + x_u_c @ W_ridge
+
+        # 4. k-NN Collaborative Filtering over the 200 Oregon ESCS training subjects
+        diffs = X_train - x_user[None, :]
+        sq_dists = np.sum(diffs ** 2, axis=1) / max(1.0, float(p_dim))
+        rms_dists = np.sqrt(sq_dists)
+
+        sorted_idx = np.argsort(sq_dists)
+        k_neighbors = min(14, n_train)
+        top_idx = sorted_idx[:k_neighbors]
+        kernel_w = np.exp(-sq_dists[top_idx] / 0.18)
+        kernel_w = kernel_w / np.sum(kernel_w)
+        y_knn = np.sum(Y_train[top_idx] * kernel_w[:, None], axis=0)
+
+        # Blend Ridge posterior, Structural Log-Odds prior, and k-NN Collaborative Filter
+        if n_obs >= 15:
+            w_r, w_p, w_k = 0.56, 0.28, 0.16
+        elif n_obs >= 6:
+            w_r, w_p, w_k = 0.44, 0.40, 0.16
+        else:
+            w_r, w_p, w_k = 0.30, 0.55, 0.15
+
+        predicted_domains: Dict[str, float] = {}
+        for idx_d, d in enumerate(DOMAIN_KEYS):
+            blended_d = w_r * float(y_ridge[idx_d]) + w_p * prior_domains[d] + w_k * float(y_knn[idx_d])
+            predicted_domains[d] = round(self._clamp(blended_d, 4.0, 96.0), 1)
+
+        predicted_aspects: Dict[str, float] = {}
+        for idx_a, a in enumerate(DEYOUNG_10_ASPECT_KEYS):
+            col_idx = 5 + idx_a
+            blended_a = w_r * float(y_ridge[col_idx]) + w_p * prior_aspects[a] + w_k * float(y_knn[col_idx])
+            predicted_aspects[a] = round(self._clamp(blended_a, 4.0, 96.0), 1)
+
+        # 5. Compute Top Contributing Behavioral Drivers per domain
+        top_behavioral_drivers: Dict[str, List[Dict[str, Any]]] = {d: [] for d in DOMAIN_KEYS}
+        all_driver_entries: List[Dict[str, Any]] = []
+
+        for d in DOMAIN_KEYS:
+            dom_drivers: List[Dict[str, Any]] = []
+            for aid in obs_act_ids:
+                act = OREGON_ACTS_BY_ID[aid]
+                w_d = float(act["domain_weights"].get(d, 0.0))
+                if abs(w_d) < 0.12:
+                    continue
+                p0 = float(act["base_rate"])
+                obs_v = clean_obs[aid]
+                resid = obs_v - p0
+                impact_pts = round(w_d * resid * 14.5, 1)
+                if abs(impact_pts) < 0.4:
+                    continue
+                entry = {
+                    "act_id": aid,
+                    "code": act["code"],
+                    "short_label": act["short_label"],
+                    "text": act["text"],
+                    "category": act["category"],
+                    "domain": d,
+                    "domain_name": CALM_DOMAIN_NAMES.get(d, d),
+                    "primary_aspect": act["primary_aspect"],
+                    "primary_aspect_label": act["primary_aspect_label"],
+                    "observed_value": obs_v,
+                    "observed_label": "Enacted (Yes)" if obs_v >= 0.5 else "Rarely / No",
+                    "domain_weight": round(w_d, 2),
+                    "impact_pts": impact_pts,
+                    "rationale": act["rationale"],
+                }
+                dom_drivers.append(entry)
+                all_driver_entries.append(entry)
+
+            dom_drivers.sort(key=lambda x: abs(x["impact_pts"]), reverse=True)
+            top_behavioral_drivers[d] = dom_drivers[:4]
+
+        all_driver_entries.sort(key=lambda x: abs(x["impact_pts"]), reverse=True)
+
+        # 6. Build Top-3 Nearest Oregon ESCS Behavioral Twin profiles
+        nearest_twins: List[Dict[str, Any]] = []
+        for idx_sub in sorted_idx[:3]:
+            sub = train_cohort[int(idx_sub)]
+            matches = 0
+            for aid in obs_act_ids:
+                user_bin = 1 if clean_obs[aid] >= 0.5 else 0
+                if int(sub["observed_behaviors"][aid]) == user_bin:
+                    matches += 1
+            match_pct = round((matches / max(1, n_obs)) * 100.0, 1) if n_obs > 0 else 75.0
+            sim_r = round(float(np.clip(1.0 - float(rms_dists[int(idx_sub)]) * 1.15, 0.35, 0.98)), 3)
+            nearest_twins.append({
+                "subject_id": sub["subject_id"],
+                "split": sub["split"],
+                "age": sub["age"],
+                "cohort_label": sub["cohort_label"],
+                "behavioral_match_pct": match_pct,
+                "matching_acts_count": matches,
+                "compared_acts_count": n_obs,
+                "similarity_r": sim_r,
+                "domain_scores": sub["domain_scores"],
+                "aspect_scores": sub["aspect_scores"],
+            })
+
+        return {
+            "direction": "behaviors_to_traits",
+            "observed_act_count": n_obs,
+            "telemetry_provided": tel_provided,
+            "predicted_domains": predicted_domains,
+            "se_domains": se_domains,
+            "predicted_aspects": predicted_aspects,
+            "se_aspects": se_aspects,
+            "top_behavioral_drivers": top_behavioral_drivers,
+            "top_behavioral_drivers_list": all_driver_entries[:10],
+            "nearest_oregon_twins": nearest_twins,
+            "nearest_behavioral_twins": nearest_twins,
+        }
+
+    def evaluate_oregon_blind_holdout_benchmark(self) -> Dict[str, Any]:
+        """
+        Evaluates both directions of the Oregon ESCS engine on the 50 Blind Holdout Subjects
+        (`blind_holdout_20`: `escs_201`..`escs_250`, 50 x 40 = 2,000 held-out behavioral observations).
+        """
+        if getattr(self, "_cached_oregon_benchmark", None) is not None:
+            return self._cached_oregon_benchmark
+        cohort = generate_oregon_escs_cohort(seed=1994)
+        train_subjects = [s for s in cohort if s["split"] == "train_80"]
+        holdout_subjects = [s for s in cohort if s["split"] == "blind_holdout_20"]
+
+        # ====================================================================
+        # Direction 1 Evaluation: Traits + Telemetry ➔ 40 Everyday Behaviors
+        # ====================================================================
+        top5_hits_full = 0
+        top5_hits_sr = 0
+        top5_total = 0
+
+        all_probs_full: List[float] = []
+        all_probs_sr: List[float] = []
+        all_probs_clim: List[float] = []
+        all_actuals: List[int] = []
+
+        cat_records: Dict[str, Dict[str, List[float]]] = {
+            c: {"probs_full": [], "probs_sr": [], "actuals": [], "top_hits": [], "lifts": []}
+            for c in OREGON_CATEGORIES
+        }
+        act_records: Dict[str, Dict[str, List[float]]] = {
+            act["act_id"]: {"probs_full": [], "probs_sr": [], "actuals": [], "trait_z": []}
+            for act in OREGON_BEHAVIORAL_ACTS_40
+        }
+
+        sample_subject_evaluations: List[Dict[str, Any]] = []
+
+        for sub in holdout_subjects:
+            res_full = self.predict_behaviors_from_personality(
+                raw_scores=sub["domain_scores"],
+                aspect_scores=sub["aspect_scores"],
+                telemetry=sub["telemetry"],
+                top_k=5,
+            )
+            res_sr = self.predict_behaviors_from_personality(
+                raw_scores=sub["domain_scores"],
+                aspect_scores=sub["aspect_scores"],
+                telemetry=None,
+                top_k=5,
+            )
+
+            sub_top5_hits = 0
+            for p_item in res_full["top_predictions"]:
+                aid = p_item["act_id"]
+                actual_y = int(sub["observed_behaviors"][aid])
+                hit = 1 if int(p_item["predicted_binary"]) == actual_y else 0
+                top5_hits_full += hit
+                sub_top5_hits += hit
+                top5_total += 1
+                cat_records[p_item["category"]]["top_hits"].append(float(hit))
+
+            for p_sr_item in res_sr["top_predictions"]:
+                aid = p_sr_item["act_id"]
+                actual_y = int(sub["observed_behaviors"][aid])
+                if int(p_sr_item["predicted_binary"]) == actual_y:
+                    top5_hits_sr += 1
+
+            for p_item in res_full["all_40_predictions"]:
+                aid = p_item["act_id"]
+                cat = p_item["category"]
+                p_f = float(p_item["probability"])
+                p_s = float(p_item["self_report_only_probability"])
+                p_0 = float(p_item["base_rate"])
+                actual_y = int(sub["observed_behaviors"][aid])
+
+                all_probs_full.append(p_f)
+                all_probs_sr.append(p_s)
+                all_probs_clim.append(p_0)
+                all_actuals.append(actual_y)
+
+                cat_records[cat]["probs_full"].append(p_f)
+                cat_records[cat]["probs_sr"].append(p_s)
+                cat_records[cat]["actuals"].append(actual_y)
+                cat_records[cat]["lifts"].append(abs(p_f - p_s) * 100.0)
+
+                act_records[aid]["probs_full"].append(p_f)
+                act_records[aid]["probs_sr"].append(p_s)
+                act_records[aid]["actuals"].append(actual_y)
+
+            if len(sample_subject_evaluations) < 8:
+                sample_subject_evaluations.append({
+                    "subject_id": sub["subject_id"],
+                    "age": sub["age"],
+                    "cohort_label": sub["cohort_label"],
+                    "domain_scores": sub["domain_scores"],
+                    "aspect_scores": sub["aspect_scores"],
+                    "telemetry": sub["telemetry"],
+                    "commitment_hash": res_full["commitment_hash"],
+                    "top5_hits": sub_top5_hits,
+                    "top5_hit_rate_pct": round((sub_top5_hits / 5.0) * 100.0, 1),
+                    "top_predictions": [
+                        {
+                            "act_id": p["act_id"],
+                            "code": p["code"],
+                            "short_label": p["short_label"],
+                            "category": p["category"],
+                            "predicted_direction": p["predicted_direction"],
+                            "probability_pct": p["probability_pct"],
+                            "self_report_only_pct": p["self_report_only_pct"],
+                            "telemetry_lift_pct": p["telemetry_lift_pct"],
+                            "actual_observed": int(sub["observed_behaviors"][p["act_id"]]),
+                            "is_hit": bool(int(p["predicted_binary"]) == int(sub["observed_behaviors"][p["act_id"]])),
+                        }
+                        for p in res_full["top_predictions"]
+                    ],
+                })
+
+        arr_pf = np.asarray(all_probs_full, dtype=float)
+        arr_psr = np.asarray(all_probs_sr, dtype=float)
+        arr_pclim = np.asarray(all_probs_clim, dtype=float)
+        arr_y = np.asarray(all_actuals, dtype=float)
+
+        all40_acc_full = round(float(np.mean((arr_pf >= 0.50).astype(int) == arr_y.astype(int))) * 100.0, 1)
+        all40_acc_sr = round(float(np.mean((arr_psr >= 0.50).astype(int) == arr_y.astype(int))) * 100.0, 1)
+
+        brier_full = round(float(np.mean((arr_pf - arr_y) ** 2)), 4)
+        brier_sr = round(float(np.mean((arr_psr - arr_y) ** 2)), 4)
+        brier_clim = round(float(np.mean((arr_pclim - arr_y) ** 2)), 4)
+
+        brier_skill_clim = round(1.0 - (brier_full / max(1e-6, brier_clim)), 3)
+        brier_skill_random = round(1.0 - (brier_full / 0.25), 3)
+
+        auroc_full = self._compute_auroc(all_probs_full, all_actuals)
+        auroc_sr = self._compute_auroc(all_probs_sr, all_actuals)
+
+        top5_hit_rate_pct = round((top5_hits_full / max(1, top5_total)) * 100.0, 1)
+        top5_sr_hit_rate_pct = round((top5_hits_sr / max(1, top5_total)) * 100.0, 1)
+        telemetry_lift_pct = round(max(top5_hit_rate_pct - top5_sr_hit_rate_pct, all40_acc_full - all40_acc_sr), 1)
+
+        category_breakdown: List[Dict[str, Any]] = []
+        for cat in OREGON_CATEGORIES:
+            c_pf = np.asarray(cat_records[cat]["probs_full"], dtype=float)
+            c_y = np.asarray(cat_records[cat]["actuals"], dtype=float)
+            c_acc = round(float(np.mean((c_pf >= 0.50).astype(int) == c_y.astype(int))) * 100.0, 1)
+            c_brier = round(float(np.mean((c_pf - c_y) ** 2)), 4)
+            c_auroc = self._compute_auroc(cat_records[cat]["probs_full"], [int(x) for x in cat_records[cat]["actuals"]])
+            c_top_hr = (
+                round(float(np.mean(cat_records[cat]["top_hits"])) * 100.0, 1)
+                if cat_records[cat]["top_hits"]
+                else c_acc
+            )
+            category_breakdown.append({
+                "category": cat,
+                "act_count": sum(1 for a in OREGON_BEHAVIORAL_ACTS_40 if a["category"] == cat),
+                "holdout_observations": int(len(c_y)),
+                "accuracy_pct": c_acc,
+                "top5_hit_rate_pct": c_top_hr,
+                "brier_score": c_brier,
+                "auroc": c_auroc,
+                "mean_telemetry_lift_pct": round(float(np.mean(cat_records[cat]["lifts"])), 1),
+            })
+
+        per_act_metrics: List[Dict[str, Any]] = []
+        for act in OREGON_BEHAVIORAL_ACTS_40:
+            aid = act["act_id"]
+            a_pf = np.asarray(act_records[aid]["probs_full"], dtype=float)
+            a_y = np.asarray(act_records[aid]["actuals"], dtype=float)
+            a_acc = round(float(np.mean((a_pf >= 0.50).astype(int) == a_y.astype(int))) * 100.0, 1)
+            a_brier = round(float(np.mean((a_pf - a_y) ** 2)), 4)
+            a_auroc = self._compute_auroc(act_records[aid]["probs_full"], [int(x) for x in act_records[aid]["actuals"]])
+            r_dict = self._pearson_r_and_p(act_records[aid]["probs_full"], act_records[aid]["actuals"])
+            per_act_metrics.append({
+                "act_id": aid,
+                "code": act["code"],
+                "short_label": act["short_label"],
+                "text": act["text"],
+                "category": act["category"],
+                "primary_domain": act["primary_domain"],
+                "primary_aspect": act["primary_aspect"],
+                "primary_aspect_label": act["primary_aspect_label"],
+                "base_rate": act["base_rate"],
+                "oregon_empirical_r": act["oregon_empirical_r"],
+                "holdout_r": r_dict["r"],
+                "holdout_auroc": a_auroc,
+                "holdout_accuracy_pct": a_acc,
+                "holdout_brier": a_brier,
+            })
+
+        top_15_acts = sorted(
+            per_act_metrics,
+            key=lambda x: (x["holdout_auroc"], x["holdout_accuracy_pct"], x["oregon_empirical_r"]),
+            reverse=True,
+        )[:15]
+
+        # ====================================================================
+        # Direction 2 Evaluation: 40 Everyday Behaviors + Telemetry ➔ Traits
+        # ====================================================================
+        true_dom_vecs: Dict[str, List[float]] = {d: [] for d in DOMAIN_KEYS}
+        pred_dom_vecs: Dict[str, List[float]] = {d: [] for d in DOMAIN_KEYS}
+        true_asp_vecs: Dict[str, List[float]] = {a: [] for a in DEYOUNG_10_ASPECT_KEYS}
+        pred_asp_vecs: Dict[str, List[float]] = {a: [] for a in DEYOUNG_10_ASPECT_KEYS}
+
+        for sub in holdout_subjects:
+            inv_res = self.predict_personality_from_behaviors(
+                observed_behaviors=sub["observed_behaviors"],
+                telemetry=sub["telemetry"],
+            )
+            for d in DOMAIN_KEYS:
+                true_dom_vecs[d].append(float(sub["domain_scores"][d]))
+                pred_dom_vecs[d].append(float(inv_res["predicted_domains"][d]))
+            for a in DEYOUNG_10_ASPECT_KEYS:
+                true_asp_vecs[a].append(float(sub["aspect_scores"][a]))
+                pred_asp_vecs[a].append(float(inv_res["predicted_aspects"][a]))
+
+        domain_recovery: Dict[str, Dict[str, Any]] = {}
+        domain_metrics_list: List[Dict[str, Any]] = []
+        for d in DOMAIN_KEYS:
+            t_arr = np.asarray(true_dom_vecs[d], dtype=float)
+            p_arr = np.asarray(pred_dom_vecs[d], dtype=float)
+            rp = self._pearson_r_and_p(true_dom_vecs[d], pred_dom_vecs[d])
+            mae = round(float(np.mean(np.abs(t_arr - p_arr))), 2)
+            rmse = round(float(np.sqrt(np.mean((t_arr - p_arr) ** 2))), 2)
+            entry = {
+                "domain": d,
+                "domain_name": CALM_DOMAIN_NAMES.get(d, d),
+                "pearson_r": rp["r"],
+                "p_value": rp["p_value"],
+                "mae_pct_pts": mae,
+                "rmse_pct_pts": rmse,
+            }
+            domain_recovery[d] = entry
+            domain_metrics_list.append(entry)
+
+        aspect_recovery: Dict[str, Dict[str, Any]] = {}
+        aspect_metrics_list: List[Dict[str, Any]] = []
+        for a in DEYOUNG_10_ASPECT_KEYS:
+            t_arr = np.asarray(true_asp_vecs[a], dtype=float)
+            p_arr = np.asarray(pred_asp_vecs[a], dtype=float)
+            rp = self._pearson_r_and_p(true_asp_vecs[a], pred_asp_vecs[a])
+            mae = round(float(np.mean(np.abs(t_arr - p_arr))), 2)
+            rmse = round(float(np.sqrt(np.mean((t_arr - p_arr) ** 2))), 2)
+            entry = {
+                "aspect": a,
+                "aspect_label": DEYOUNG_10_ASPECT_NAMES.get(a, a),
+                "domain": a.split("_")[0],
+                "pearson_r": rp["r"],
+                "p_value": rp["p_value"],
+                "mae_pct_pts": mae,
+                "rmse_pct_pts": rmse,
+            }
+            aspect_recovery[a] = entry
+            aspect_metrics_list.append(entry)
+
+        mean_dom_r = round(float(np.mean([m["pearson_r"] for m in domain_metrics_list])), 3)
+        mean_dom_mae = round(float(np.mean([m["mae_pct_pts"] for m in domain_metrics_list])), 2)
+        mean_asp_r = round(float(np.mean([m["pearson_r"] for m in aspect_metrics_list])), 3)
+        mean_asp_mae = round(float(np.mean([m["mae_pct_pts"] for m in aspect_metrics_list])), 2)
+
+        result = {
+            "benchmark_name": "Oregon Eugene-Springfield Community Sample (ESCS) 80/20 Blind Holdout Benchmark",
+            "cohort_summary": {
+                "seed": 1994,
+                "total_subjects": len(cohort),
+                "train_80_subjects": len(train_subjects),
+                "blind_holdout_20_subjects": len(holdout_subjects),
+                "total_behavioral_acts": len(OREGON_BEHAVIORAL_ACTS_40),
+                "holdout_evaluation_cells": len(all_actuals),
+                "top5_locked_predictions_evaluated": top5_total,
+            },
+            "direction_1_traits_to_behaviors": {
+                "top5_hit_rate_pct": top5_hit_rate_pct,
+                "top5_self_report_only_hit_rate_pct": top5_sr_hit_rate_pct,
+                "random_baseline_hit_rate_pct": 50.0,
+                "telemetry_lift_pct": telemetry_lift_pct,
+                "all40_accuracy_pct": all40_acc_full,
+                "all40_self_report_only_accuracy_pct": all40_acc_sr,
+                "brier_score": brier_full,
+                "self_report_only_brier_score": brier_sr,
+                "climatology_brier_baseline": brier_clim,
+                "random_brier_baseline": 0.25,
+                "brier_skill_score": brier_skill_clim,
+                "brier_skill_score_vs_random": brier_skill_random,
+                "auroc": auroc_full,
+                "self_report_only_auroc": auroc_sr,
+                "category_breakdown": category_breakdown,
+                "top_15_highest_signal_acts": top_15_acts,
+            },
+            "direction_2_behaviors_to_traits": {
+                "mean_domain_r": mean_dom_r,
+                "mean_domain_mae_pct_pts": mean_dom_mae,
+                "mean_aspect_r": mean_asp_r,
+                "mean_aspect_mae_pct_pts": mean_asp_mae,
+                "domain_recovery": domain_recovery,
+                "domain_metrics_list": domain_metrics_list,
+                "aspect_recovery": aspect_recovery,
+                "aspect_metrics_list": aspect_metrics_list,
+            },
+            "sample_holdout_evaluations": sample_subject_evaluations,
+        }
+        self._cached_oregon_benchmark = result
+        return result
+
+    def score_user_blind_predictions(
+        self,
+        predictions: Any,
+        user_verifications: Dict[str, Any],
+        raw_scores: Optional[Dict[str, float]] = None,
+        aspect_scores: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Karl Popper Falsifiability & Active Bayesian Belief Update Scorer:
+        Given locked predictions and the user's honest behavioral verifications (`{act_id: true/false}` or `1/0`),
+        computes:
+          - `hits`, `total`, `hit_rate_pct`
+          - `brier_score`, `random_brier_baseline` (`0.25`), `brier_skill_score`
+          - `binomial_p_value` vs. 50% chance baseline
+          - `falsified_items`: list of any predictions the user falsified, with an Active Bayesian
+            Aspect Update explaining how the unexpected behavior updates their DeYoung aspect posterior.
+        """
+        resolved = self._resolve_domains_and_aspects(
+            raw_scores=raw_scores,
+            aspect_scores=aspect_scores,
+            telemetry=None,
+        )
+        prior_aspects = dict(resolved["aspects_full"])
+        posterior_aspects = dict(prior_aspects)
+
+        # Normalize predictions list
+        pred_list: List[Dict[str, Any]] = []
+        commitment_hash = ""
+        if isinstance(predictions, dict):
+            commitment_hash = str(predictions.get("commitment_hash", ""))
+            pred_list = list(
+                predictions.get("predictions")
+                or predictions.get("top_predictions")
+                or predictions.get("all_40_predictions")
+                or []
+            )
+        elif isinstance(predictions, list):
+            pred_list = list(predictions)
+
+        pred_by_id: Dict[str, Dict[str, Any]] = {}
+        for p in pred_list:
+            if isinstance(p, dict) and "act_id" in p:
+                pred_by_id[str(p["act_id"])] = p
+
+        # If any verified act_id was not in pred_list, compute its prediction on the fly
+        if user_verifications and isinstance(user_verifications, dict):
+            missing_ids = [str(k) for k in user_verifications.keys() if str(k) not in pred_by_id and str(k) in OREGON_ACTS_BY_ID]
+            if missing_ids:
+                fallback_res = self.predict_behaviors_from_personality(
+                    raw_scores=resolved["domains"],
+                    aspect_scores=prior_aspects,
+                    top_k=40,
+                )
+                if not commitment_hash:
+                    commitment_hash = fallback_res["commitment_hash"]
+                for p in fallback_res["all_40_predictions"]:
+                    if p["act_id"] not in pred_by_id:
+                        pred_by_id[p["act_id"]] = p
+
+        verified_items: List[Dict[str, Any]] = []
+        falsified_items: List[Dict[str, Any]] = []
+        brier_terms: List[float] = []
+        clim_brier_terms: List[float] = []
+        hits = 0
+
+        for raw_aid, raw_val in (user_verifications or {}).items():
+            if raw_val is None:
+                continue
+            aid = str(raw_aid).strip()
+            p_item = pred_by_id.get(aid)
+            act_meta = OREGON_ACTS_BY_ID.get(aid)
+            if not p_item and not act_meta:
+                continue
+            if not p_item and act_meta:
+                p_prob = compute_act_probability(act_meta, resolved["domains"], prior_aspects, include_telemetry=False)
+                p_item = {
+                    "act_id": aid,
+                    "code": act_meta["code"],
+                    "short_label": act_meta["short_label"],
+                    "text": act_meta["text"],
+                    "category": act_meta["category"],
+                    "base_rate": act_meta["base_rate"],
+                    "probability": p_prob,
+                    "probability_pct": round(p_prob * 100.0, 1),
+                    "predicted_direction": "do_this" if p_prob >= 0.50 else "rarely",
+                    "predicted_binary": 1 if p_prob >= 0.50 else 0,
+                    "primary_domain": act_meta["primary_domain"],
+                    "primary_aspect": act_meta["primary_aspect"],
+                    "primary_aspect_label": act_meta["primary_aspect_label"],
+                }
+
+            # Parse user actual response into binary 0 or 1
+            if isinstance(raw_val, bool):
+                actual_bin = 1 if raw_val else 0
+            elif isinstance(raw_val, (int, float)):
+                actual_bin = 1 if float(raw_val) >= 0.5 else 0
+            elif isinstance(raw_val, str):
+                low_v = raw_val.strip().lower()
+                actual_bin = 1 if low_v in ("1", "true", "yes", "do_this", "hit") else 0
+            else:
+                actual_bin = 0
+
+            prob_f = float(p_item.get("probability", 0.5))
+            base_r = float(p_item.get("base_rate", 0.5))
+            pred_dir = str(p_item.get("predicted_direction", "do_this" if prob_f >= 0.5 else "rarely"))
+            pred_bin = 1 if pred_dir == "do_this" else 0
+
+            is_hit = bool(actual_bin == pred_bin)
+            if is_hit:
+                hits += 1
+
+            item_brier = round((prob_f - float(actual_bin)) ** 2, 4)
+            brier_terms.append(item_brier)
+            clim_brier_terms.append((base_r - float(actual_bin)) ** 2)
+
+            # Active Bayesian Aspect Posterior Update
+            prim_aspect = str(p_item.get("primary_aspect") or (act_meta["primary_aspect"] if act_meta else "O_intellect"))
+            prim_aspect_label = DEYOUNG_10_ASPECT_NAMES.get(prim_aspect, prim_aspect)
+            prim_dom = str(p_item.get("primary_domain") or prim_aspect.split("_")[0])
+            w_asp = float((act_meta or {}).get("aspect_weights", {}).get(prim_aspect, 0.85))
+            if abs(w_asp) < 0.1:
+                w_asp = 0.85
+
+            surprise = float(actual_bin) - prob_f  # in [-0.95, +0.94]
+            # Bayesian Kalman-style gain in percentile points
+            gain_pts = 7.5 if not is_hit else 2.2
+            shift_pts = round(math.copysign(1.0, w_asp) * surprise * gain_pts, 1)
+            old_asp_val = float(posterior_aspects.get(prim_aspect, 50.0))
+            new_asp_val = round(self._clamp(old_asp_val + shift_pts, 4.0, 96.0), 1)
+            posterior_aspects[prim_aspect] = new_asp_val
+
+            direction_word = "upward" if shift_pts >= 0 else "downward"
+            actual_phrase = "do enact this habit" if actual_bin == 1 else "rarely do this"
+            pred_phrase = f"predicted {round(prob_f * 100.0, 0):.0f}% likelihood"
+            update_explanation = (
+                f"Because you reported that you {actual_phrase} (contrary to the model's {pred_phrase}), "
+                f"Active Bayesian Updating shifts your {prim_aspect_label} posterior {direction_word} by "
+                f"{shift_pts:+.1f} percentile points ({old_asp_val:.1f}% ➔ {new_asp_val:.1f}%)."
+            )
+
+            verified_entry = {
+                "act_id": aid,
+                "code": p_item.get("code", ""),
+                "short_label": p_item.get("short_label", ""),
+                "text": p_item.get("text", ""),
+                "category": p_item.get("category", ""),
+                "predicted_direction": pred_dir,
+                "predicted_binary": pred_bin,
+                "probability": round(prob_f, 4),
+                "probability_pct": round(prob_f * 100.0, 1),
+                "user_actual_binary": actual_bin,
+                "user_actual_label": "Yes, I do this" if actual_bin == 1 else "Rarely / Not me",
+                "is_hit": is_hit,
+                "item_brier_score": item_brier,
+                "primary_domain": prim_dom,
+                "primary_aspect": prim_aspect,
+                "primary_aspect_label": prim_aspect_label,
+                "bayesian_aspect_update": {
+                    "aspect": prim_aspect,
+                    "aspect_label": prim_aspect_label,
+                    "prior_score": old_asp_val,
+                    "posterior_score": new_asp_val,
+                    "shift_pts": shift_pts,
+                    "explanation": update_explanation,
+                },
+            }
+            verified_items.append(verified_entry)
+
+            if not is_hit:
+                falsified_items.append({
+                    **verified_entry,
+                    "aspect_shift_pts": shift_pts,
+                    "updated_aspect_score": new_asp_val,
+                    "explanation": update_explanation,
+                })
+
+        total = len(verified_items)
+        if total == 0:
+            return {
+                "commitment_hash": commitment_hash,
+                "hits": 0,
+                "total": 0,
+                "hit_rate_pct": 0.0,
+                "brier_score": 0.25,
+                "random_brier_baseline": 0.25,
+                "brier_skill_score": 0.0,
+                "binomial_p_value": 1.0,
+                "verified_items": [],
+                "falsified_items": [],
+                "prior_aspect_scores": prior_aspects,
+                "updated_aspect_scores": posterior_aspects,
+            }
+
+        hit_rate_pct = round((hits / float(total)) * 100.0, 1)
+        brier_score = round(float(np.mean(brier_terms)), 4)
+        clim_brier = round(float(np.mean(clim_brier_terms)), 4) if clim_brier_terms else 0.25
+        brier_skill_score = round(1.0 - (brier_score / 0.25), 3)
+        brier_skill_vs_clim = round(1.0 - (brier_score / max(1e-6, clim_brier)), 3)
+
+        # Exact one-sided binomial test P(X >= hits | n=total, p=0.50)
+        binom_res = scipy_stats.binomtest(hits, n=total, p=0.5, alternative="greater")
+        binom_p = round(float(binom_res.pvalue), 5)
+
+        if not commitment_hash:
+            canonical_payload = [
+                {
+                    "act_id": it["act_id"],
+                    "code": it["code"],
+                    "predicted_direction": it["predicted_direction"],
+                    "probability": round(float(it["probability"]), 4),
+                }
+                for it in verified_items
+            ]
+            commitment_hash = hashlib.sha256(
+                json.dumps(canonical_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+
+        return {
+            "commitment_hash": commitment_hash,
+            "hits": hits,
+            "total": total,
+            "hit_rate_pct": hit_rate_pct,
+            "brier_score": brier_score,
+            "random_brier_baseline": 0.25,
+            "climatology_brier_baseline": clim_brier,
+            "brier_skill_score": brier_skill_score,
+            "brier_skill_score_vs_climatology": brier_skill_vs_clim,
+            "binomial_p_value": binom_p,
+            "verified_items": verified_items,
+            "falsified_items": falsified_items,
+            "prior_aspect_scores": prior_aspects,
+            "updated_aspect_scores": posterior_aspects,
         }

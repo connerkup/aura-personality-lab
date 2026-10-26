@@ -238,3 +238,93 @@ class ScienceCalibrateRequest(BaseModel):
 
     items: Optional[List[Dict[str, Any]]] = Field(default=None)
     masks: Optional[List[Dict[str, Any]]] = Field(default=None)
+
+
+class PredictBehaviorsFromTraitsRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    raw_scores: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="5 Big Five domain percentiles (O, C, E, A, N in 0..100).",
+    )
+    scores: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional alias for `raw_scores`.",
+    )
+    domain_scores: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional alias for `raw_scores`.",
+    )
+    aspect_scores: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional 10 DeYoung aspect percentiles (0..100).",
+    )
+    deyoung_10_aspects: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional alias for `aspect_scores`.",
+    )
+    telemetry: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional Mind Moment behavioral telemetry (pulse_reaction, constellation_memory, minds_eye).",
+    )
+    context_profile: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional demographic/life-context profile.",
+    )
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=40,
+        description="Number of highest-information locked predictions to select (default 5, max 40).",
+    )
+
+
+class PredictTraitsFromBehaviorsRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    observed_behaviors: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Map of Oregon ESCS act_id ('escs_act_01'..'escs_act_40') or code to binary (0/1), bool, or Likert (1..5).",
+    )
+    behaviors: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional alias for `observed_behaviors`.",
+    )
+    telemetry: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional Mind Moment behavioral telemetry.",
+    )
+
+
+class VerifyBlindPredictionsRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    predictions: Optional[Any] = Field(
+        default=None,
+        description="Locked predictions list or response object from `/api/v1/prediction/behaviors-from-traits`.",
+    )
+    user_verifications: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Map of act_id to user verification (true/false or 1/0).",
+    )
+    verifications: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional alias for `user_verifications`.",
+    )
+    raw_scores: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional prior 5 domain scores (0..100).",
+    )
+    aspect_scores: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional prior 10 DeYoung aspect scores (0..100) for Active Bayesian Aspect Updating.",
+    )
+    commitment_hash: Optional[str] = Field(
+        default=None,
+        description="Optional SHA-256 pre-commitment hash to record in the SQLite verification ledger.",
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Optional assessment session ID.",
+    )
+

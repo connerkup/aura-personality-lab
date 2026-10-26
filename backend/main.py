@@ -34,6 +34,11 @@ from science.models.adaptive_item_pool_120 import (
     LOCALE_LABELS,
     SES_CONTEXT_LABELS,
 )
+from science.models.oregon_escs_behavioral_matrix import (
+    OREGON_BEHAVIORAL_ACTS_40,
+    OREGON_CATEGORIES,
+    generate_oregon_escs_cohort,
+)
 from backend.database import (
     DB_PATH,
     activate_flow,
@@ -42,12 +47,15 @@ from backend.database import (
     get_active_flow,
     get_all_calibration_records,
     get_assessment_session,
+    get_blind_prediction_verification_summary,
     get_flow,
     get_session_counts,
     init_db,
+    list_blind_prediction_verifications,
     list_flows,
     list_questions,
     save_assessment_session,
+    save_blind_prediction_verification,
     upsert_flow,
     upsert_question,
 )
@@ -57,11 +65,14 @@ from backend.schemas import (
     ChemistryRequest,
     ContextualMorphRequest,
     DecomposeRequest,
+    PredictBehaviorsFromTraitsRequest,
+    PredictTraitsFromBehaviorsRequest,
     ScienceCalibrateRequest,
     ScoreAssessmentRequest,
     StudioFlowUpsertRequest,
     StudioQuestionBulkUpsertRequest,
     StudioQuestionUpsertRequest,
+    VerifyBlindPredictionsRequest,
 )
 
 ENGINE = NeuroPsychometricEngine()
@@ -167,6 +178,8 @@ def get_science_models() -> Dict[str, Any]:
         "cognitive_telemetry_priors": ENGINE.telemetry_priors_schema,
         "shadow_calibration_stats": shadow_stats,
         "adaptive_pool_summary": _build_adaptive_pool_summary(questions),
+        "oregon_escs_acts": OREGON_BEHAVIORAL_ACTS_40,
+        "oregon_escs_categories": OREGON_CATEGORIES,
         "active_flow": get_active_flow(),
         "flows": list_flows(),
         "papers_corpus": papers_corpus,
@@ -328,6 +341,73 @@ def post_chemistry_analyze(payload: ChemistryRequest) -> Dict[str, Any]:
 
 
 # ============================================================================
+# Oregon ESCS Bidirectional Behavioral Prediction & Falsifiability Endpoints
+# ============================================================================
+
+
+@app.post("/api/v1/prediction/behaviors-from-traits")
+def post_prediction_behaviors_from_traits(payload: PredictBehaviorsFromTraitsRequest) -> Dict[str, Any]:
+    raw_scores = payload.raw_scores or payload.scores or payload.domain_scores or {}
+    aspect_scores = payload.aspect_scores or payload.deyoung_10_aspects
+    return ENGINE.predict_behaviors_from_personality(
+        raw_scores=raw_scores,
+        aspect_scores=aspect_scores,
+        telemetry=payload.telemetry,
+        context_profile=payload.context_profile,
+        top_k=payload.top_k,
+    )
+
+
+@app.post("/api/v1/prediction/traits-from-behaviors")
+def post_prediction_traits_from_behaviors(payload: PredictTraitsFromBehaviorsRequest) -> Dict[str, Any]:
+    observed = payload.observed_behaviors if payload.observed_behaviors else (payload.behaviors or {})
+    return ENGINE.predict_personality_from_behaviors(
+        observed_behaviors=observed,
+        telemetry=payload.telemetry,
+    )
+
+
+@app.post("/api/v1/prediction/verify")
+def post_prediction_verify(payload: VerifyBlindPredictionsRequest) -> Dict[str, Any]:
+    verifications = payload.user_verifications if payload.user_verifications else (payload.verifications or {})
+    scored = ENGINE.score_user_blind_predictions(
+        predictions=payload.predictions,
+        user_verifications=verifications,
+        raw_scores=payload.raw_scores,
+        aspect_scores=payload.aspect_scores,
+    )
+    if payload.commitment_hash and not scored.get("commitment_hash"):
+        scored["commitment_hash"] = payload.commitment_hash
+
+    saved_record = save_blind_prediction_verification(
+        scored_result=scored,
+        extra_meta={"session_id": payload.session_id} if payload.session_id else None,
+    )
+    return {
+        **scored,
+        "verification_record": saved_record,
+        "verification_ledger_summary": get_blind_prediction_verification_summary(),
+    }
+
+
+@app.get("/api/v1/studio/oregon-holdout-benchmark")
+@app.get("/api/v1/prediction/oregon-holdout-benchmark")
+def get_oregon_holdout_benchmark() -> Dict[str, Any]:
+    benchmark = ENGINE.evaluate_oregon_blind_holdout_benchmark()
+    cohort = generate_oregon_escs_cohort(seed=1994)
+    holdout_subjects = [s for s in cohort if s["split"] == "blind_holdout_20"]
+    ledger_summary = get_blind_prediction_verification_summary()
+    return {
+        **benchmark,
+        "behavioral_acts": OREGON_BEHAVIORAL_ACTS_40,
+        "oregon_behavioral_acts_40": OREGON_BEHAVIORAL_ACTS_40,
+        "categories": OREGON_CATEGORIES,
+        "sample_holdout_subjects": holdout_subjects[:12],
+        "verification_ledger": ledger_summary,
+    }
+
+
+# ============================================================================
 # Kae & Conner's Internal Science & Flow Studio Endpoints (`/api/v1/studio/*`)
 # ============================================================================
 
@@ -340,6 +420,8 @@ def get_studio_overview() -> Dict[str, Any]:
     shadow_stats = _compute_live_shadow_stats()
     papers_corpus = load_papers_corpus(ROOT_DIR / "science")
     counts = get_session_counts()
+    oregon_bench = ENGINE.evaluate_oregon_blind_holdout_benchmark()
+    verif_summary = get_blind_prediction_verification_summary()
 
     return {
         "studio_title": "Kae & Conner's Aura Science & Flow Studio",
@@ -352,6 +434,9 @@ def get_studio_overview() -> Dict[str, Any]:
         "cortical_domains": ENGINE.cortical_schema.get("domains", []),
         "telemetry_priors": ENGINE.telemetry_priors_schema,
         "shadow_calibration_stats": shadow_stats,
+        "oregon_holdout_benchmark": oregon_bench,
+        "oregon_behavioral_acts_40": OREGON_BEHAVIORAL_ACTS_40,
+        "verification_ledger": verif_summary,
         "papers_corpus": papers_corpus,
     }
 
