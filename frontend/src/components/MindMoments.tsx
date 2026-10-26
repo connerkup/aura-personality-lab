@@ -770,7 +770,7 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
       {gameIndex === 0 && (
         <div className="aura-mg-shell" data-game="still-water">
           <div className="typeform-eyebrow-theme" style={{ marginBottom: '6px' }}>
-            Mind Moment 1 of 3 · 8 seconds
+            Phase 1 · Neurological Baseline 1 of 3 · 8s
           </div>
           <h3 className="aura-mg-title">Tap when the circle turns warm gold</h3>
 
@@ -834,7 +834,7 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
       {gameIndex === 1 && (
         <div className="aura-mg-shell" data-game="night-sky">
           <div className="typeform-eyebrow-theme" style={{ marginBottom: '6px' }}>
-            Mind Moment 2 of 3 · 8 seconds
+            Phase 1 · Neurological Baseline 2 of 3 · 8s
           </div>
           <h3 className="aura-mg-title">Watch 4 stars light up, then trace them</h3>
 
@@ -931,7 +931,7 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
       {gameIndex === 2 && mindsEyeStep === 'A' && (
         <div className="aura-mg-shell" data-game="inner-canvas" data-step="A">
           <div className="typeform-eyebrow-theme" style={{ marginBottom: '6px' }}>
-            Mind Moment 3 of 3 · Part 1 of 2
+            Phase 1 · Neurological Baseline 3 of 3 · Part 1
           </div>
           <h3 className="aura-mg-title">
             Imagine a warm lantern on a table. What appears in your mind?
@@ -985,7 +985,7 @@ export const MindMoments: React.FC<MindMomentsProps> = ({
       {gameIndex === 2 && mindsEyeStep === 'B' && (
         <div className="aura-mg-shell" data-game="inner-canvas" data-step="B">
           <div className="typeform-eyebrow-theme" style={{ marginBottom: '6px' }}>
-            Mind Moment 3 of 3 · Part 2 of 2
+            Phase 1 · Neurological Baseline 3 of 3 · Part 2
           </div>
           <h3 className="aura-mg-title" style={{ marginBottom: '20px' }}>
             When you think through a decision alone, how does your mind move?

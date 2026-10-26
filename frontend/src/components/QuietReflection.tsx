@@ -139,12 +139,31 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
     return resolved.length > 0 ? resolved : effectivePool.slice(0, 15);
   }, [effectivePool, committedIds, responses, currentStepSlug, currentQIdx]);
 
-  // Unified end-to-end interwoven sequence (18 steps total):
-  // Q1..Q4 (dynamic) -> Mind Moment 1 (Still Water, Step 05/18) ->
-  // Q5..Q8 (dynamic) -> Mind Moment 2 (Night Sky, Step 10/18) ->
-  // Q9..Q15 (dynamic) -> Mind Moment 3 (Inner Canvas, Step 18/18)
+  // Unified 4-Phase Neurological-First sequence (18 steps total):
+  // Phase 1 (Steps 01..03 / 18): Mind Moment 1 (Still Water), Mind Moment 2 (Night Sky), Mind Moment 3 (Inner Canvas)
+  //   -> Establishes the user's neurological/cognitive baseline theta_0(m) BEFORE any self-report questions!
+  // Phase 2 (Steps 04..08 / 18): Q1..Q5 (Broad & disarming everyday snapshots seeded by Phase 1 telemetry)
+  // Phase 3 (Steps 09..14 / 18): Q6..Q11 (Targeted conditional IF/THEN branch_probe items untangling tensions)
+  // Phase 4 (Steps 15..18 / 18): Q12..Q15 (High-discrimination 2PL deep_resolution items pinning 10 DeYoung Aspects)
   const interwovenSteps = useMemo<FlowStepItem[]>(() => {
-    const steps: FlowStepItem[] = [];
+    const steps: FlowStepItem[] = [
+      {
+        kind: 'moment',
+        slug: MIND_MOMENT_SLUGS[0],
+        momentIndex: 0,
+      },
+      {
+        kind: 'moment',
+        slug: MIND_MOMENT_SLUGS[1],
+        momentIndex: 1,
+      },
+      {
+        kind: 'moment',
+        slug: MIND_MOMENT_SLUGS[2],
+        momentIndex: 2,
+      },
+    ];
+
     flowQuestions.forEach((q, qIdx) => {
       steps.push({
         kind: 'question',
@@ -152,28 +171,6 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
         question: q,
         questionIndex: qIdx,
       });
-
-      if (qIdx === 3) {
-        steps.push({
-          kind: 'moment',
-          slug: MIND_MOMENT_SLUGS[0],
-          momentIndex: 0,
-        });
-      }
-
-      if (qIdx === 7) {
-        steps.push({
-          kind: 'moment',
-          slug: MIND_MOMENT_SLUGS[1],
-          momentIndex: 1,
-        });
-      }
-    });
-
-    steps.push({
-      kind: 'moment',
-      slug: MIND_MOMENT_SLUGS[2],
-      momentIndex: 2,
     });
 
     return steps;
@@ -298,12 +295,9 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       onSelectAnswer(qId, val);
       setIsFadingOut(true);
 
-      // Build updated step target so auto-advance lands on the newly selected adaptive question slug (or Mind Moment)
+      // Build updated step target so auto-advance lands on the newly selected adaptive question slug (or Portrait after Q15)
       const nextStepIdx = activeStepIndex + 1;
-      const isNextStepMoment =
-        (qStepIdx === 3 && nextStepIdx === 4) ||
-        (qStepIdx === 7 && nextStepIdx === 9) ||
-        qStepIdx === 14;
+      const isFinalQuestion = qStepIdx >= 14;
 
       const nextSelectedQuestionId = nextCommitted[qStepIdx + 1];
       const nextSelectedQuestion = nextSelectedQuestionId
@@ -313,8 +307,8 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       autoAdvanceRef.current = window.setTimeout(() => {
         autoAdvanceRef.current = null;
         setIsFadingOut(false);
-        if (isNextStepMoment) {
-          goToStepIndex(nextStepIdx, true);
+        if (isFinalQuestion) {
+          onFinishToPortrait();
         } else if (nextSelectedQuestion) {
           setMomentsDirectSequence(false);
           onSetCurrentQIdx(qStepIdx + 1);
@@ -413,40 +407,43 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
 
   const handleCompleteSingleMoment = useCallback(
     (momentIdx: 0 | 1 | 2, latestTel: TelemetryState) => {
+      // Phase 1 Step 01 -> Step 02 (Still Water -> Night Sky)
+      if (momentIdx === 0) {
+        if (reflectPart !== 'moments') {
+          onSwitchReflectPart('moments');
+        }
+        onNavigateStepSlug(MIND_MOMENT_SLUGS[1], true);
+        return;
+      }
+      // Phase 1 Step 02 -> Step 03 (Night Sky -> Inner Canvas)
+      if (momentIdx === 1) {
+        if (reflectPart !== 'moments') {
+          onSwitchReflectPart('moments');
+        }
+        onNavigateStepSlug(MIND_MOMENT_SLUGS[2], true);
+        return;
+      }
+
+      // Phase 1 Step 03 (Inner Canvas) completed!
       if (momentsDirectSequence) {
-        if (momentIdx === 0) {
-          onNavigateStepSlug(MIND_MOMENT_SLUGS[1], true);
-          return;
-        }
-        if (momentIdx === 1) {
-          onNavigateStepSlug(MIND_MOMENT_SLUGS[2], true);
-          return;
-        }
         onFinishToPortrait(latestTel);
         return;
       }
 
-      // Re-select the next question after Still Water (qIdx 4) or Night Sky (qIdx 8) using the fresh Mind Moment telemetry!
-      if (momentIdx === 0 || momentIdx === 1) {
-        const answeredCountBeforeMoment = momentIdx === 0 ? 4 : 8;
-        const prefixIds = flowQuestions
-          .slice(0, answeredCountBeforeMoment)
-          .map((q) => q.id);
-        const sel = selectNextAdaptiveQuestionClient({
-          pool: effectivePool,
-          answeredIds: prefixIds,
-          responses,
-          telemetry: latestTel,
-        });
-        if (sel.nextItem) {
-          const updatedIds = [...prefixIds, sel.nextItem.id];
-          updateCommittedIds(updatedIds);
-          setMomentsDirectSequence(false);
-          onSetCurrentQIdx(answeredCountBeforeMoment);
-          onSwitchReflectPart('questions');
-          onNavigateStepSlug(getQuestionSlug(sel.nextItem), true);
-          return;
-        }
+      // Use the completed 3-game neurological baseline (theta_0(m)) to select Question 1 (Step 04/18, Phase 2)
+      const sel = selectNextAdaptiveQuestionClient({
+        pool: effectivePool,
+        answeredIds: [],
+        responses,
+        telemetry: latestTel,
+      });
+      if (sel.nextItem) {
+        updateCommittedIds([sel.nextItem.id]);
+        setMomentsDirectSequence(false);
+        onSetCurrentQIdx(0);
+        onSwitchReflectPart('questions');
+        onNavigateStepSlug(getQuestionSlug(sel.nextItem), true);
+        return;
       }
 
       if (activeStepIndex < totalStepsCount - 1) {
@@ -458,13 +455,13 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
     [
       activeStepIndex,
       effectivePool,
-      flowQuestions,
       goToStepIndex,
       momentsDirectSequence,
       onFinishToPortrait,
       onNavigateStepSlug,
       onSetCurrentQIdx,
       onSwitchReflectPart,
+      reflectPart,
       responses,
       totalStepsCount,
       updateCommittedIds,
@@ -623,9 +620,13 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
                   fontWeight: 600,
                 }}
               >
-                {isBranchedItem
-                  ? '· ✦ Branched to you'
-                  : `· Adaptive (${effectivePool.length})`}
+                {activeStep.kind === 'question' && activeStep.questionIndex >= 11
+                  ? '· ✦ Phase 4 · Deep 2PL'
+                  : activeStep.kind === 'question' && activeStep.questionIndex >= 5
+                  ? '· ✦ Phase 3 · Branched'
+                  : isBranchedItem
+                  ? '· ✦ Phase 2 · Neuro-Routed'
+                  : `· Phase 2 · Baseline (${effectivePool.length})`}
               </span>
             </div>
 

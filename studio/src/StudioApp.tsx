@@ -448,10 +448,18 @@ export const StudioApp: React.FC = () => {
       if (!preset) return;
       setCatActivePresetId(preset.id);
 
-      const pathIds: number[] = [1];
-      const simResp: Record<number, number> = {};
       const byId = new Map<number, ItemBankQuestion>();
       questions.forEach((q) => byId.set(q.id, q));
+
+      // Phase 1 Neurological Baseline (preset.telemetry) seeds Question 1!
+      const firstSel = selectNextAdaptiveQuestionClient({
+        pool: questions,
+        answeredIds: [],
+        responses: {},
+        telemetry: preset.telemetry,
+      });
+      const pathIds: number[] = [firstSel.nextItem ? firstSel.nextItem.id : 1];
+      const simResp: Record<number, number> = {};
 
       for (let step = 0; step < 15; step++) {
         const curId = pathIds[step];
@@ -713,7 +721,18 @@ export const StudioApp: React.FC = () => {
     > = [];
 
     let stepNum = 1;
-    qList.forEach((q, idx) => {
+    if (selectedFlow.include_mind_moments) {
+      MIND_MOMENT_INTERLUDES.forEach((m) => {
+        steps.push({
+          kind: 'moment',
+          stepNumber: stepNum++,
+          moment: m,
+          slug: m.slug,
+        });
+      });
+    }
+
+    qList.forEach((q) => {
       const qSlug = getQuestionSlug(q);
       steps.push({
         kind: 'question',
@@ -721,38 +740,7 @@ export const StudioApp: React.FC = () => {
         question: q,
         slug: qSlug,
       });
-
-      if (selectedFlow.include_mind_moments) {
-        const oneBasedQPos = idx + 1;
-        if (oneBasedQPos === 4) {
-          const m1 = MIND_MOMENT_INTERLUDES[0];
-          steps.push({
-            kind: 'moment',
-            stepNumber: stepNum++,
-            moment: m1,
-            slug: m1.slug,
-          });
-        } else if (oneBasedQPos === 8) {
-          const m2 = MIND_MOMENT_INTERLUDES[1];
-          steps.push({
-            kind: 'moment',
-            stepNumber: stepNum++,
-            moment: m2,
-            slug: m2.slug,
-          });
-        }
-      }
     });
-
-    if (selectedFlow.include_mind_moments) {
-      const m3 = MIND_MOMENT_INTERLUDES[2];
-      steps.push({
-        kind: 'moment',
-        stepNumber: stepNum++,
-        moment: m3,
-        slug: m3.slug,
-      });
-    }
 
     return steps;
   }, [selectedFlow, questions]);

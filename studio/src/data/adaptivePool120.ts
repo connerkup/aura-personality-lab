@@ -2745,25 +2745,55 @@ export function computeLiveDomainPosteriors(
   const effectivePool = pool && pool.length > 0 ? pool : ADAPTIVE_POOL_120;
   const result = {} as Record<DomainKey, DomainPosterior>;
 
-  // Extract optional telemetry boosts
-  let oPriorShift = 0.0;
+  // Phase 1 Neurological Baseline Priors from the 3 Mind Moments
+  const priorShift: Record<DomainKey, number> = { O: 0, C: 0, E: 0, A: 0, N: 0 };
+  const priorWeight: Record<DomainKey, number> = { O: 0, C: 0, E: 0, A: 0, N: 0 };
+
   if (telemetry && typeof telemetry === 'object') {
     const t = telemetry as Record<string, any>;
-    const me = t.minds_eye;
-    if (me && me.completed && typeof me.imagery_vividness === 'number' && me.imagery_vividness <= 25) {
-      oPriorShift += 0.25;
+    const pr = t.pulse_reaction;
+    if (pr && pr.completed) {
+      if ((typeof pr.rt_cv_pct === 'number' && pr.rt_cv_pct >= 18) || (pr.false_starts ?? 0) >= 1) {
+        // Variable attentional cadence / dopamine foraging prior
+        priorShift.O += 0.22;
+        priorWeight.O += 0.35;
+        priorShift.C -= 0.28;
+        priorWeight.C += 0.45;
+      } else if (typeof pr.steadiness_pct === 'number' && pr.steadiness_pct >= 86) {
+        // Steady tonic executive control prior
+        priorShift.C += 0.24;
+        priorWeight.C += 0.40;
+        priorShift.N -= 0.16;
+        priorWeight.N += 0.30;
+      }
     }
     const cm = t.constellation_memory;
-    if (cm && cm.completed && typeof cm.accuracy_pct === 'number' && cm.accuracy_pct >= 80) {
-      oPriorShift += 0.12;
+    if (cm && cm.completed && typeof cm.accuracy_pct === 'number') {
+      if (cm.accuracy_pct >= 80 && (cm.mean_chunk_ms ?? 450) <= 500) {
+        priorShift.O += 0.24;
+        priorWeight.O += 0.40;
+        priorShift.C += 0.12;
+        priorWeight.C += 0.25;
+      }
+    }
+    const me = t.minds_eye;
+    if (me && me.completed && typeof me.imagery_vividness === 'number') {
+      if (me.imagery_vividness <= 25 || me.inner_modality === 'wordless_concept') {
+        // Aphantasia / Conceptual Knowing de-confounder prior
+        priorShift.O += 0.32;
+        priorWeight.O += 0.45;
+      } else if (me.imagery_vividness >= 80 || me.inner_modality === 'visual_cinema') {
+        priorShift.O += 0.22;
+        priorWeight.O += 0.35;
+      }
     }
   }
 
   for (const d of DOMAIN_KEYS) {
     const domItems = effectivePool.filter((it) => it.domain === d);
-    let weightedSum = d === 'O' ? oPriorShift : 0.0;
-    let weightTotal = 0.0;
-    let fisherSum = 0.35; // Bayesian prior precision I_0
+    let weightedSum = priorShift[d] * priorWeight[d];
+    let weightTotal = priorWeight[d];
+    let fisherSum = 0.35 + priorWeight[d] * 0.45; // Bayesian prior precision I_0 + neurological baseline
     let answeredCount = 0;
 
     for (const it of domItems) {
@@ -2825,15 +2855,18 @@ export function selectNextAdaptiveQuestionClient(params: {
   const domainPosteriors = computeLiveDomainPosteriors(effectivePool, responses, telemetry);
   const stepNumber = answeredSet.size + 1;
 
-  // Determine target stage tier based on step number (1..15)
+  // 4-Phase Neurological-First Funnel:
+  // Phase 1: Mind Moments 1..3 (Neurological Baseline, completed before Question 1)
+  // Phase 2 (Question steps 1..5): Warm Everyday Rhythm & Symmetry-Breaking Anchors ('anchor')
+  // Phase 3 (Question steps 6..11): Targeted Conditional IF/THEN Branch Probes ('branch_probe')
+  // Phase 4 (Question steps 12..15): High-Discrimination 2PL Deep Nuance Resolution ('deep_resolution')
   const stageTier: NodeTier =
     stepNumber <= 5
       ? 'anchor'
       : stepNumber <= 11
       ? 'branch_probe'
-      : 'everyday_moment';
+      : 'deep_resolution';
 
-  // If step 1 and Q#1 is unanswered, start cleanly at Anchor Q#1
   const unanswered = effectivePool.filter((it) => !answeredSet.has(Number(it.id)));
   if (unanswered.length === 0) {
     const fallback = effectivePool[0];
@@ -2854,20 +2887,30 @@ export function selectNextAdaptiveQuestionClient(params: {
       ? Number(params.answeredIds[params.answeredIds.length - 1])
       : null;
 
-  // Extract telemetry signals for adaptive routing
+  // Extract Phase 1 Mind Moment telemetry signals for adaptive routing
   let pulseHighVariance = false;
+  let pulseSteadyTonic = false;
   let constellationHighPrecision = false;
   let mindsEyeConceptual = false;
+  let mindsEyeVividCinema = false;
   if (telemetry && typeof telemetry === 'object') {
     const t = telemetry as Record<string, any>;
-    if (t.pulse_reaction?.completed && (t.pulse_reaction.rt_cv_pct > 20 || t.pulse_reaction.false_starts >= 1)) {
-      pulseHighVariance = true;
+    if (t.pulse_reaction?.completed) {
+      if (t.pulse_reaction.rt_cv_pct >= 18 || (t.pulse_reaction.false_starts ?? 0) >= 1) {
+        pulseHighVariance = true;
+      } else if ((t.pulse_reaction.steadiness_pct ?? 0) >= 86) {
+        pulseSteadyTonic = true;
+      }
     }
     if (t.constellation_memory?.completed && t.constellation_memory.accuracy_pct >= 80) {
       constellationHighPrecision = true;
     }
-    if (t.minds_eye?.completed && t.minds_eye.imagery_vividness <= 25) {
-      mindsEyeConceptual = true;
+    if (t.minds_eye?.completed) {
+      if (t.minds_eye.imagery_vividness <= 25 || t.minds_eye.inner_modality === 'wordless_concept') {
+        mindsEyeConceptual = true;
+      } else if (t.minds_eye.imagery_vividness >= 80 || t.minds_eye.inner_modality === 'visual_cinema') {
+        mindsEyeVividCinema = true;
+      }
     }
   }
 
@@ -2884,7 +2927,7 @@ export function selectNextAdaptiveQuestionClient(params: {
       ((domPost.se / 10.0) * (1.0 + 0.45 / (1.0 + domPost.answered_count))).toFixed(3)
     );
     if (stepNumber <= 5 && domPost.answered_count === 0) {
-      uncertainty_weight = Number((uncertainty_weight + 0.65).toFixed(3));
+      uncertainty_weight = Number((uncertainty_weight + 0.72).toFixed(3));
     }
 
     // Evaluate conditional branch trigger
@@ -2903,46 +2946,76 @@ export function selectNextAdaptiveQuestionClient(params: {
       }
     }
 
-    // Stage Tier Bonus
+    // Resolve item tier
     const itemTier = (it.node_tier ||
       (it.id <= 12
         ? 'anchor'
-        : it.id <= 15 || it.id >= 101
+        : it.id <= 15 || it.id >= 96
         ? 'everyday_moment'
-        : it.id <= 50
+        : it.id <= 55
         ? 'branch_probe'
         : 'deep_resolution')) as NodeTier;
 
     let stage_bonus = 0.0;
-    if (stepNumber === 1 && it.id === 1) {
-      stage_bonus = 3.0;
+    if (stepNumber === 1) {
+      // First question after Phase 1 Neurological Baseline:
+      // Route gently based on what Still Water, Night Sky, and Inner Canvas revealed!
+      if (pulseHighVariance && (it.id === 13 || it.id === 3)) {
+        stage_bonus = it.id === 13 ? 2.85 : 2.65;
+      } else if (mindsEyeConceptual && it.id === 1) {
+        stage_bonus = 2.85;
+      } else if (pulseSteadyTonic && (it.id === 12 || it.id === 1)) {
+        stage_bonus = it.id === 12 ? 2.75 : 2.65;
+      } else if (it.id === 12 || it.id === 1 || it.id === 13) {
+        stage_bonus = it.id === 1 ? 2.55 : 2.45;
+      } else if (itemTier === 'anchor') {
+        stage_bonus = 1.25;
+      }
     } else if (stepNumber <= 5) {
-      if (itemTier === 'anchor') stage_bonus = 1.35;
-      else if (itemTier === 'branch_probe' && trigEval.triggered) stage_bonus = 0.95;
+      // Phase 2: Warm Everyday Snapshots & Broad 5-Domain Anchors
+      if (itemTier === 'anchor') stage_bonus = 1.38;
+      else if (itemTier === 'everyday_moment' && it.id <= 15) stage_bonus = 1.24;
+      else if (itemTier === 'branch_probe' && trigEval.triggered) stage_bonus = 0.85;
       else stage_bonus = -0.35;
     } else if (stepNumber <= 11) {
-      if (itemTier === 'branch_probe') stage_bonus = 0.95;
-      else if (itemTier === 'deep_resolution') stage_bonus = 0.92;
+      // Phase 3: Targeted Conditional Branch Probes
+      if (itemTier === 'branch_probe') stage_bonus = 1.25;
+      else if (itemTier === 'everyday_moment' && trigEval.triggered) stage_bonus = 1.08;
+      else if (itemTier === 'deep_resolution') stage_bonus = 0.78;
       else if (itemTier === 'anchor') stage_bonus = 0.45;
-      else stage_bonus = 0.35;
-    } else {
-      // Steps 12..15: Everyday Moment & Deep Resolution synthesis
-      if (itemTier === 'everyday_moment') stage_bonus = 1.25;
-      else if (itemTier === 'deep_resolution') stage_bonus = 0.95;
-      else if (itemTier === 'branch_probe') stage_bonus = 0.65;
       else stage_bonus = 0.25;
+    } else {
+      // Phase 4 (Steps 12..15): High-Discrimination 2PL Deep Nuance Resolution
+      const closenessToTheta = Math.max(0, 1.0 - Math.abs(b - theta) * 0.55);
+      if (itemTier === 'deep_resolution') stage_bonus = Number((1.35 + closenessToTheta * 0.42).toFixed(2));
+      else if (itemTier === 'everyday_moment') stage_bonus = 0.95;
+      else if (itemTier === 'branch_probe') stage_bonus = 0.72;
+      else stage_bonus = 0.20;
     }
 
-    // Telemetry-informed bonus
+    // Telemetry-informed routing bonus from Phase 1 Mind Moments
     let telemetry_bonus = 0.0;
-    if (pulseHighVariance && (it.domain === 'C' || it.probe_type === 'salience_vs_routine_split' || it.probe_type === 'sneaky_open_loops')) {
+    if (
+      pulseHighVariance &&
+      (it.domain === 'C' ||
+        it.probe_type === 'salience_vs_routine_split' ||
+        it.probe_type === 'sneaky_open_loops')
+    ) {
+      telemetry_bonus += 0.46;
+    }
+    if (constellationHighPrecision && it.domain === 'O' && b >= 0.1) {
       telemetry_bonus += 0.38;
     }
-    if (constellationHighPrecision && it.domain === 'O' && b >= 0.2) {
-      telemetry_bonus += 0.36;
+    if (mindsEyeConceptual && it.domain === 'O') {
+      if (it.aspect.includes('Intellect') || it.probe_type === 'cortical_prior') {
+        telemetry_bonus += 0.44;
+      } else {
+        // De-confound purely visual-imagery Openness items for conceptual thinkers
+        telemetry_bonus -= 0.32;
+      }
     }
-    if (mindsEyeConceptual && it.domain === 'O' && it.aspect.includes('Intellect')) {
-      telemetry_bonus += 0.34;
+    if (mindsEyeVividCinema && it.domain === 'O' && it.aspect.includes('Openness')) {
+      telemetry_bonus += 0.36;
     }
     telemetry_bonus = Number(telemetry_bonus.toFixed(3));
 
@@ -2951,6 +3024,9 @@ export function selectNextAdaptiveQuestionClient(params: {
     );
 
     const reasons: string[] = [];
+    if (telemetry_bonus > 0 && stepNumber <= 5) {
+      reasons.push(`Phase 1 Mind Moment Baseline Prior (+${telemetry_bonus.toFixed(2)})`);
+    }
     if (trigEval.triggered && trigEval.description) {
       const parentAns =
         responses[normalizeParentTrigger(it.parent_trigger)!.if_question_id] ??
@@ -2962,7 +3038,7 @@ export function selectNextAdaptiveQuestionClient(params: {
         domPost.theta >= 0 ? `+${domPost.theta}` : domPost.theta
       } (SE ±${domPost.se}%)`
     );
-    if (telemetry_bonus > 0) {
+    if (telemetry_bonus > 0 && stepNumber > 5) {
       reasons.push(`Mind Moment Telemetry Prior (+${telemetry_bonus.toFixed(2)})`);
     }
 
@@ -3017,11 +3093,9 @@ export function buildDynamicAdaptivePath(params: {
       path.push(id);
     }
   }
-  if (path.length === 0) {
-    path.push(1);
-  }
 
   // Project remaining slots up to targetLength (15) using selectNextAdaptiveQuestionClient
+  // (including Question 1 when path is initially empty, routed by Phase 1 Mind Moment telemetry!)
   const simulatedResponses: Record<string | number, number> = { ...(params.responses || {}) };
   while (path.length < targetLen && path.length < effectivePool.length) {
     const sel = selectNextAdaptiveQuestionClient({

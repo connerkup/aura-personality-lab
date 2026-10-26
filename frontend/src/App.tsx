@@ -118,8 +118,8 @@ export const App: React.FC = () => {
       return {
         hasExplicitRoute: false,
         initialTab: 'test' as MainTab,
-        initialStepSlug: QUESTION_SLUG_MAP[1],
-        initialPart: 'questions' as 'questions' | 'moments',
+        initialStepSlug: MIND_MOMENT_SLUGS[0],
+        initialPart: 'moments' as 'questions' | 'moments',
       };
     }
     const params = new URLSearchParams(window.location.search);
@@ -128,6 +128,7 @@ export const App: React.FC = () => {
     const tabFromView = viewParamToTab(viewParam);
 
     const isMomentSlug =
+      !stepParam ||
       stepParam === MIND_MOMENT_SLUGS[0] ||
       stepParam === MIND_MOMENT_SLUGS[1] ||
       stepParam === MIND_MOMENT_SLUGS[2];
@@ -139,7 +140,7 @@ export const App: React.FC = () => {
     return {
       hasExplicitRoute,
       initialTab: tabFromView || 'test',
-      initialStepSlug: stepParam || QUESTION_SLUG_MAP[1],
+      initialStepSlug: stepParam || MIND_MOMENT_SLUGS[0],
       initialPart: (isMomentSlug ? 'moments' : 'questions') as 'questions' | 'moments',
     };
   }, []);
@@ -178,6 +179,7 @@ export const App: React.FC = () => {
     if (
       initialUrlState.initialTab !== 'test' ||
       (initialUrlState.hasExplicitRoute &&
+        initialUrlState.initialStepSlug !== MIND_MOMENT_SLUGS[0] &&
         initialUrlState.initialStepSlug !== QUESTION_SLUG_MAP[1])
     ) {
       return false;
@@ -198,7 +200,7 @@ export const App: React.FC = () => {
     if (initialUrlState.hasExplicitRoute && initialUrlState.initialStepSlug) {
       return initialUrlState.initialStepSlug;
     }
-    return savedProgress?.currentStepSlug || QUESTION_SLUG_MAP[1];
+    return savedProgress?.currentStepSlug || MIND_MOMENT_SLUGS[0];
   });
 
   const [userName, setUserName] = useState<string>(() => savedProgress?.userName || 'Alex');
@@ -292,7 +294,7 @@ export const App: React.FC = () => {
       const viewVal = tabToViewParam(tab);
       url.searchParams.set('view', viewVal);
       if (tab === 'test') {
-        url.searchParams.set('step', stepSlug || QUESTION_SLUG_MAP[1]);
+        url.searchParams.set('step', stepSlug || MIND_MOMENT_SLUGS[0]);
       } else {
         url.searchParams.delete('step');
       }
@@ -319,7 +321,7 @@ export const App: React.FC = () => {
     const onPopState = () => {
       const params = new URLSearchParams(window.location.search);
       const nextTab = viewParamToTab(params.get('view')) || 'test';
-      const nextStep = params.get('step') || QUESTION_SLUG_MAP[1];
+      const nextStep = params.get('step') || MIND_MOMENT_SLUGS[0];
       setActiveTab(nextTab);
       if (nextTab === 'test') {
         setCurrentStepSlug(nextStep);
@@ -514,8 +516,8 @@ export const App: React.FC = () => {
     setResponses({});
     setDynamicQuestionIds([1]);
     setCurrentQIdx(0);
-    setReflectPart('questions');
-    const firstSlug = QUESTION_SLUG_MAP[1];
+    setReflectPart('moments');
+    const firstSlug = MIND_MOMENT_SLUGS[0];
     setCurrentStepSlug(firstSlug);
     AuraMicroGamesBridge.resetState();
     syncUrlHistory('test', firstSlug, 'push');
@@ -532,10 +534,10 @@ export const App: React.FC = () => {
         setResponses({});
         setDynamicQuestionIds([1]);
         setCurrentQIdx(0);
-        const firstSlug = QUESTION_SLUG_MAP[1];
+        const firstSlug = MIND_MOMENT_SLUGS[0];
         setCurrentStepSlug(firstSlug);
         AuraMicroGamesBridge.resetState();
-        setReflectPart('questions');
+        setReflectPart('moments');
         setWelcomeVisible(false);
         setActiveTab('test');
         syncUrlHistory('test', firstSlug, 'push');
