@@ -81,12 +81,149 @@ export type LifeContext =
 export type LocaleSetting = 'urban' | 'suburban' | 'rural';
 export type SupportedLanguage = 'en' | 'es' | 'fr' | 'pt';
 
+export type BandwidthState =
+  | 'rested_spacious'
+  | 'steady_engaged'
+  | 'stretched_thin'
+  | 'high_pressure_sprint'
+  | 'running_on_fumes';
+
+export type SocialBatteryState =
+  | 'warm_outward'
+  | 'calm_even'
+  | 'peopled_out'
+  | 'restless_overstimulated'
+  | 'heavy_self_critical';
+
+export type CulturalRegionId =
+  | 'us_canada'
+  | 'uk_ireland'
+  | 'western_europe'
+  | 'nordic_scandinavia'
+  | 'mediterranean_southern_eu'
+  | 'eastern_europe'
+  | 'latin_america'
+  | 'east_asia'
+  | 'southeast_asia'
+  | 'south_asia'
+  | 'middle_east_north_africa'
+  | 'sub_saharan_africa'
+  | 'australia_nz'
+  | 'multicultural_immigrant';
+
+export type UpbringingScript =
+  | 'direct_autonomy'
+  | 'warm_expressive'
+  | 'harmony_face'
+  | 'high_duty_standards'
+  | 'quiet_self_reliance';
+
+export type FaithTrajectory =
+  | 'secular_practical'
+  | 'cultural_tradition'
+  | 'personal_spiritual'
+  | 'active_observant_faith'
+  | 'strict_to_independent';
+
+export type ScheduleAutonomy =
+  | 'self_directed'
+  | 'mixed_schedule'
+  | 'shift_or_demand_bound';
+
+export type HouseholdSpace =
+  | 'solo_space'
+  | 'partner_or_roommates'
+  | 'family_kids_care';
+
+export type LifeTransitionState =
+  | 'steady_chapter'
+  | 'new_parent_caregiving'
+  | 'career_or_move_shift'
+  | 'breakup_or_grief'
+  | 'health_sleep_recovery';
+
+export type ChronotypePreference =
+  | 'morning_lark'
+  | 'midday_flexible'
+  | 'night_owl';
+
+export type SocializedExpectation =
+  | 'accommodating_caretaker'
+  | 'stoic_self_reliant'
+  | 'egalitarian_balanced';
+
+export type FamilyRoleNiche =
+  | 'eldest_responsible'
+  | 'family_peacekeeper'
+  | 'independent_middle'
+  | 'free_youngest'
+  | 'only_child_solo';
+
+export type AttentionEngineType =
+  | 'linear_checklist'
+  | 'interest_hyperfocus'
+  | 'deep_systemizer'
+  | 'nonlinear_explorer'
+  | 'flexible_switcher';
+
+export type SensoryThresholdType =
+  | 'lively_bustle'
+  | 'moderate_sensory'
+  | 'noise_crowd_sensitive';
+
+export type WorkRoleBleedType =
+  | 'people_empathy_heavy'
+  | 'risk_flaw_vigilance'
+  | 'strict_ops_deadlines'
+  | 'creative_research'
+  | 'natural_match';
+
+export type ResourceCushionType =
+  | 'outsourced_support'
+  | 'self_managed_admin'
+  | 'tight_scarcity_load';
+
 export interface UserContextProfile {
   ageBand: AgeBand;
   lifeContext: LifeContext;
   locale: LocaleSetting;
   language: SupportedLanguage;
   customBio?: string;
+  bandwidthState?: BandwidthState;
+  lifeTransition?: LifeTransitionState;
+  socialBatteryState?: SocialBatteryState;
+  chronotype?: ChronotypePreference;
+  countryRaised?: CulturalRegionId;
+  countryCurrent?: CulturalRegionId;
+  socializedExpectation?: SocializedExpectation;
+  upbringingScript?: UpbringingScript;
+  familyRole?: FamilyRoleNiche;
+  faithTrajectory?: FaithTrajectory;
+  attentionEngine?: AttentionEngineType;
+  sensoryThreshold?: SensoryThresholdType;
+  innerModality?: InnerModality;
+  workRoleBleed?: WorkRoleBleedType;
+  scheduleAutonomy?: ScheduleAutonomy;
+  householdSpace?: HouseholdSpace;
+  resourceCushion?: ResourceCushionType;
+  baselineCompleted?: boolean;
+}
+
+export interface ConfoundAdjustmentItem {
+  id: string;
+  category: string;
+  label: string;
+  domain: DomainKey;
+  delta_pct: number;
+  explanation: string;
+}
+
+export interface DeconfoundingSummary {
+  domain_deltas: Record<DomainKey, number>;
+  aspect_deltas: Record<string, number>;
+  bicultural_active: boolean;
+  scale_bias_note: string;
+  active_adjustments: ConfoundAdjustmentItem[];
 }
 
 export interface MorphedQuestionResult {
@@ -259,6 +396,7 @@ export interface DecompositionResult {
   };
   top_unique_divergences: UniqueDivergence[];
   inferred_mask_posteriors: MaskPosterior[];
+  deconfounding_summary?: DeconfoundingSummary;
 }
 
 export interface ShadowItemDiagnostic {

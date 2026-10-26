@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { compute14FactorDeconfounding } from '../data/deconfoundingEngine';
 import {
   predictBehaviorsFromPersonalityClient,
   scoreUserBlindPredictionsClient,
@@ -9,11 +10,17 @@ import {
   CALM_DIMENSION_LABELS,
 } from '../data/scienceBundle';
 import { AuraAPI } from '../services/apiClient';
-import { DecompositionResult, DomainKey } from '../types/aura';
+import {
+  DecompositionResult,
+  DomainKey,
+  UserContextProfile,
+} from '../types/aura';
 
 interface PortraitViewProps {
   userName: string;
   decomposition: DecompositionResult | null;
+  userContext?: UserContextProfile;
+  responses?: Record<number, number>;
   proUnlocked: boolean;
   onSelectMask: (maskId: string) => void;
   onOpenMindMoments: () => void;
@@ -34,6 +41,8 @@ const PROOF_STORAGE_KEY = 'aura_consumer_proof_verifications_v1';
 export const PortraitView: React.FC<PortraitViewProps> = ({
   userName,
   decomposition,
+  userContext,
+  responses,
   proUnlocked,
   onSelectMask,
   onOpenMindMoments,
@@ -192,6 +201,13 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
       });
     }
   };
+
+  const deconf = useMemo(() => {
+    if (decomposition?.deconfounding_summary) {
+      return decomposition.deconfounding_summary;
+    }
+    return compute14FactorDeconfounding(userContext, responses);
+  }, [decomposition?.deconfounding_summary, userContext, responses]);
 
   if (!decomposition || !blindPredictionBundle || !blindScoreSummary) return null;
 
@@ -566,7 +582,7 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
       </div>
 
       {/* ====================================================================
-          CHAPTER 3: INNER MIND & SETTING SHIFTS
+          CHAPTER 3: 14-FACTOR CONTEXT DE-CONFOUNDING & SETTING SHIFTS
          ==================================================================== */}
       <div className={`portrait-chapter ${chapter === 2 ? 'active' : ''}`}>
         <div
@@ -574,80 +590,159 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '8px',
+            marginBottom: '6px',
           }}
         >
-          <h3 className="serif" style={{ fontSize: '25px' }}>
-            Inner Mind &amp; Setting Shifts
+          <h3 className="serif" style={{ fontSize: '23px' }}>
+            14-Factor De-Confounding &amp; Context
           </h3>
           <button
             type="button"
             onClick={onOpenMindMoments}
             className="aura-inline-text-btn"
-            style={{ color: 'var(--accent)', fontWeight: 600 }}
+            style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '11.5px' }}
           >
-            Replay Moments →
+            Tune Baseline →
           </button>
+        </div>
+
+        {/* Summary pill banner showing Cultural, Faith & Scale-Usage Calibration */}
+        <div
+          id="bp-deconfounding-banner"
+          style={{
+            padding: '7px 10px',
+            borderRadius: '11px',
+            background: 'var(--pill-bg)',
+            border: '1px solid var(--glass-border)',
+            marginBottom: '8px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '6px',
+              marginBottom: '2px',
+            }}
+          >
+            <span
+              className="mono"
+              style={{
+                fontSize: '9.5px',
+                color: 'var(--accent)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              }}
+            >
+              14-Factor True-Trait Calibration
+            </span>
+            <span
+              className="mono"
+              style={{ fontSize: '9.5px', color: 'var(--emerald)', fontWeight: 600 }}
+            >
+              {deconf.bicultural_active
+                ? `Bicultural (${userContext?.countryRaised || 'us_canada'} → ${userContext?.countryCurrent || 'us_canada'})`
+                : `${(userContext?.countryRaised || 'us_canada').replace(/_/g, ' ')}`}
+            </span>
+          </div>
+          <div
+            id="bp-deconfounding-headline"
+            style={{ fontSize: '11px', color: 'var(--text-primary)', lineHeight: 1.25 }}
+          >
+            {deconf.active_adjustments.length > 0
+              ? `${deconf.active_adjustments.length} active confounds subtracted (${deconf.active_adjustments
+                  .slice(0, 2)
+                  .map((a) => a.label)
+                  .join(' · ')})`
+              : 'Baseline calibrated across State, Culture, Faith, Neurotype & Daily Ecology'}
+          </div>
+          <div
+            className="mono"
+            style={{
+              fontSize: '9.5px',
+              color: 'var(--text-dim)',
+              marginTop: '2px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            Faith: {(userContext?.faithTrajectory || 'secular_practical').replace(/_/g, ' ')} · {deconf.scale_bias_note}
+          </div>
         </div>
 
         <div
           id="bp-mind-moments-grid"
           className="setting-grid"
-          style={{ marginBottom: '16px' }}
+          style={{ marginBottom: '8px', gap: '5px' }}
         >
-          <div className="compact-stat-row">
+          <div className="compact-stat-row" style={{ padding: '6px 10px' }}>
             <div>
               <span
-                style={{ fontSize: '11px', color: 'var(--rose)', fontWeight: 600 }}
+                style={{ fontSize: '10.5px', color: 'var(--rose)', fontWeight: 600 }}
               >
-                Inner Canvas · V1 &amp; Gestalt
+                Culture &amp; Upbringing Script
               </span>
               <div className="mono" style={{ fontSize: '9.5px', color: 'var(--text-dim)' }}>
-                V1 Gain {tel?.imagery_vividness ?? 72}% · {(tel?.inner_modality || 'visual_cinema').replace('_', ' ')}
+                {(userContext?.upbringingScript || 'direct_autonomy').replace(/_/g, ' ')} · Role: {(userContext?.familyRole || 'independent_middle').replace(/_/g, ' ')}
               </div>
             </div>
-            <strong id="moment-minds-eye-title" style={{ fontSize: '13px' }}>
-              {cleanMindsEyeTitle}
+            <strong
+              id="moment-minds-eye-title"
+              className="mono"
+              style={{ fontSize: '11.5px', color: 'var(--emerald)', flexShrink: 0 }}
+            >
+              {deconf.bicultural_active ? 'Bicultural · ' : ''}
+              E {deconf.domain_deltas.E >= 0 ? `+${deconf.domain_deltas.E}` : deconf.domain_deltas.E}% · A {deconf.domain_deltas.A >= 0 ? `+${deconf.domain_deltas.A}` : deconf.domain_deltas.A}%
             </strong>
             <span id="moment-minds-eye-desc" style={{ display: 'none' }}>
               {tel?.minds_eye_calm_note}
             </span>
           </div>
-          <div className="compact-stat-row">
+          <div className="compact-stat-row" style={{ padding: '6px 10px' }}>
             <div>
               <span
-                style={{ fontSize: '11px', color: 'var(--sky)', fontWeight: 600 }}
+                style={{ fontSize: '10.5px', color: 'var(--sky)', fontWeight: 600 }}
               >
-                Still Water · Go / No-Go Tempo
+                State Bandwidth &amp; Attention Engine
               </span>
               <div className="mono" style={{ fontSize: '9.5px', color: 'var(--text-dim)' }}>
-                {tel?.median_rt_ms ?? 264}ms · {tel?.rt_steadiness_pct ?? 91}% Steadiness · Lure Hold
+                Bandwidth: {(userContext?.bandwidthState || 'steady_engaged').replace(/_/g, ' ')} · {(userContext?.attentionEngine || 'linear_checklist').replace(/_/g, ' ')}
               </div>
             </div>
-            <strong id="moment-still-water-title" style={{ fontSize: '13px' }}>
-              {tel?.attentional_cadence_label || 'Steady & Present'}
+            <strong
+              id="moment-still-water-title"
+              className="mono"
+              style={{ fontSize: '11.5px', color: 'var(--sky)', flexShrink: 0 }}
+            >
+              C {deconf.domain_deltas.C >= 0 ? `+${deconf.domain_deltas.C}` : deconf.domain_deltas.C}% · N {deconf.domain_deltas.N >= 0 ? `+${deconf.domain_deltas.N}` : deconf.domain_deltas.N}%
             </strong>
             <span id="moment-still-water-desc" style={{ display: 'none' }}>
               {tel?.attentional_cadence_calm_note}
             </span>
           </div>
-          <div className="compact-stat-row">
+          <div className="compact-stat-row" style={{ padding: '6px 10px' }}>
             <div>
               <span
                 style={{
-                  fontSize: '11px',
+                  fontSize: '10.5px',
                   color: 'var(--amber)',
                   fontWeight: 600,
                 }}
               >
-                Night Sky · Working Memory
+                Faith Trajectory &amp; Work Role Bleed
               </span>
               <div className="mono" style={{ fontSize: '9.5px', color: 'var(--text-dim)' }}>
-                {tel?.memory_accuracy_pct ?? 100}% Span · {tel?.mean_chunk_ms ?? 420}ms Chunk · Decoy Filter
+                {(userContext?.faithTrajectory || 'secular_practical').replace(/_/g, ' ')} · Work: {(userContext?.workRoleBleed || 'natural_match').replace(/_/g, ' ')}
               </div>
             </div>
-            <strong id="moment-night-sky-title" style={{ fontSize: '13px' }}>
-              {tel?.pattern_memory_label || 'Whole-Constellation Memory'}
+            <strong
+              id="moment-night-sky-title"
+              className="mono"
+              style={{ fontSize: '11.5px', color: 'var(--amber)', flexShrink: 0 }}
+            >
+              O {deconf.domain_deltas.O >= 0 ? `+${deconf.domain_deltas.O}` : deconf.domain_deltas.O}% · Net {deconf.active_adjustments.length} Offsets
             </strong>
             <span id="moment-night-sky-desc" style={{ display: 'none' }}>
               {tel?.pattern_memory_calm_note}
@@ -655,64 +750,64 @@ export const PortraitView: React.FC<PortraitViewProps> = ({
           </div>
         </div>
 
-        <div className="setting-grid">
-          <div className="compact-stat-row">
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+        <div className="setting-grid" style={{ gap: '5px' }}>
+          <div className="compact-stat-row" style={{ padding: '6px 10px' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
               Routine vs. Deep Curiosity
             </span>
             <div>
               <span
                 id="gate-routine-c"
-                style={{ fontSize: '13px', color: 'var(--text-dim)' }}
+                style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}
               >
                 {Math.round(gate.routine_conscientiousness)}%
               </span>{' '}
               →{' '}
               <strong
                 id="gate-salience-c"
-                style={{ fontSize: '16px', color: 'var(--emerald)' }}
+                style={{ fontSize: '15px', color: 'var(--emerald)' }}
               >
                 {Math.round(gate.salience_locked_drive)}%
               </strong>
             </div>
           </div>
 
-          <div className="compact-stat-row">
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div className="compact-stat-row" style={{ padding: '6px 10px' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
               Crowds vs. One-on-One
             </span>
             <div>
               <span
                 id="gate-crowd-e"
-                style={{ fontSize: '13px', color: 'var(--text-dim)' }}
+                style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}
               >
                 {Math.round(gate.crowd_foraging_extraversion)}%
               </span>{' '}
               →{' '}
               <strong
                 id="gate-dyadic-e"
-                style={{ fontSize: '16px', color: 'var(--sky)' }}
+                style={{ fontSize: '15px', color: 'var(--sky)' }}
               >
                 {Math.round(gate.dyadic_1on1_capacity)}%
               </strong>
             </div>
           </div>
 
-          <div className="compact-stat-row">
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div className="compact-stat-row" style={{ padding: '6px 10px' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
               Perceptiveness vs. Tension
             </span>
             <div>
               <strong
                 id="gate-signal-o"
-                style={{ fontSize: '16px', color: 'var(--accent)' }}
+                style={{ fontSize: '15px', color: 'var(--accent)' }}
               >
                 {Math.round(gate.perceptual_signal_resolution)}%
               </strong>{' '}
               /{' '}
               <span
                 id="gate-dysreg-n"
-                style={{ fontSize: '13px', color: 'var(--text-dim)' }}
+                style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}
               >
                 {Math.round(gate.true_affective_dysregulation)}%
               </span>

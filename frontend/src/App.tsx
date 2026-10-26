@@ -27,6 +27,10 @@ import {
   findQuestionBySlugOrId,
 } from './data/adaptivePool120';
 import {
+  BASELINE_STEP_SLUGS,
+  compute14FactorDeconfounding,
+} from './data/deconfoundingEngine';
+import {
   AURA_SCIENCE_BUNDLE,
   INITIAL_STUDIO_FLOWS,
   PARTNER_PRESETS,
@@ -129,9 +133,10 @@ export const App: React.FC = () => {
 
     const isMomentSlug =
       !stepParam ||
-      stepParam === MIND_MOMENT_SLUGS[0] ||
-      stepParam === MIND_MOMENT_SLUGS[1] ||
-      stepParam === MIND_MOMENT_SLUGS[2];
+      BASELINE_STEP_SLUGS.includes(stepParam) ||
+      stepParam === 'moment-still-water' ||
+      stepParam === 'moment-night-sky' ||
+      stepParam === 'moment-inner-canvas';
 
     const hasExplicitRoute = Boolean(
       tabFromView || stepParam || params.get('u') || params.get('s')
@@ -326,9 +331,10 @@ export const App: React.FC = () => {
       if (nextTab === 'test') {
         setCurrentStepSlug(nextStep);
         const isMoment =
-          nextStep === MIND_MOMENT_SLUGS[0] ||
-          nextStep === MIND_MOMENT_SLUGS[1] ||
-          nextStep === MIND_MOMENT_SLUGS[2];
+          BASELINE_STEP_SLUGS.includes(nextStep) ||
+          nextStep === 'moment-still-water' ||
+          nextStep === 'moment-night-sky' ||
+          nextStep === 'moment-inner-canvas';
         setReflectPart(isMoment ? 'moments' : 'questions');
         if (!isMoment) {
           const foundQ = findQuestionBySlugOrId(studioQuestions, nextStep);
@@ -413,22 +419,87 @@ export const App: React.FC = () => {
     async (
       customResponses?: Record<number, number>,
       customMaskId?: string,
-      customTelemetry?: TelemetryState
+      customTelemetry?: TelemetryState,
+      customContext?: UserContextProfile
     ) => {
       const effResp = getEffectiveResponsesForScoring(customResponses ?? responses);
       const effMask = customMaskId ?? userMaskId;
       const effTel = customTelemetry ?? AuraMicroGamesBridge.getState();
+      const effCtx = customContext ?? userContext;
 
       const res = await AuraAPI.scoreAssessment({
         responses: effResp,
         mask_id: effMask,
         telemetry: effTel,
       });
+
+      // Apply the 14-Factor De-Confounding Calibration Engine to isolate True Trait Baseline
+      const deconf = compute14FactorDeconfounding(effCtx, effResp);
+      const nextDecomp: DecompositionResult = {
+        ...res.decomposition,
+        deconfounding_summary: deconf,
+        signal_layers: {
+          ...res.decomposition.signal_layers,
+          debiased_scores: {
+            O: Number(
+              Math.max(
+                4,
+                Math.min(
+                  98,
+                  (res.decomposition.signal_layers.debiased_scores.O || 50) +
+                    (deconf.domain_deltas.O || 0) * 0.45
+                )
+              ).toFixed(1)
+            ),
+            C: Number(
+              Math.max(
+                4,
+                Math.min(
+                  98,
+                  (res.decomposition.signal_layers.debiased_scores.C || 50) +
+                    (deconf.domain_deltas.C || 0) * 0.45
+                )
+              ).toFixed(1)
+            ),
+            E: Number(
+              Math.max(
+                4,
+                Math.min(
+                  98,
+                  (res.decomposition.signal_layers.debiased_scores.E || 50) +
+                    (deconf.domain_deltas.E || 0) * 0.45
+                )
+              ).toFixed(1)
+            ),
+            A: Number(
+              Math.max(
+                4,
+                Math.min(
+                  98,
+                  (res.decomposition.signal_layers.debiased_scores.A || 50) +
+                    (deconf.domain_deltas.A || 0) * 0.45
+                )
+              ).toFixed(1)
+            ),
+            N: Number(
+              Math.max(
+                4,
+                Math.min(
+                  98,
+                  (res.decomposition.signal_layers.debiased_scores.N || 50) +
+                    (deconf.domain_deltas.N || 0) * 0.45
+                )
+              ).toFixed(1)
+            ),
+          },
+        },
+      };
+
       setUserRawScores(res.irt_scoring.raw_scores);
-      setDecomposition(res.decomposition);
+      setDecomposition(nextDecomp);
       return res;
     },
-    [responses, userMaskId, getEffectiveResponsesForScoring]
+    [responses, userMaskId, userContext, getEffectiveResponsesForScoring]
   );
 
   const refreshChemistry = useCallback(
@@ -484,8 +555,8 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    refreshPortrait(responses, userMaskId, telemetry);
-  }, [telemetry]);
+    refreshPortrait(responses, userMaskId, telemetry, userContext);
+  }, [telemetry, userContext]);
 
   const handleNavigateStepSlug = useCallback(
     (slug: string, pushHistory = true) => {
@@ -1137,6 +1208,7 @@ export const App: React.FC = () => {
             dynamicQuestionIds={dynamicQuestionIds}
             onChangeDynamicQuestionIds={setDynamicQuestionIds}
             userContext={userContext}
+            onChangeUserContext={setUserContext}
             currentQIdx={currentQIdx}
             currentStepSlug={currentStepSlug}
             reflectPart={reflectPart}
@@ -1156,12 +1228,14 @@ export const App: React.FC = () => {
           <PortraitView
             userName={userName}
             decomposition={decomposition}
+            userContext={userContext}
+            responses={responses}
             proUnlocked={proUnlocked}
             onSelectMask={(maskId) => handleSelectMask(maskId)}
             onOpenMindMoments={() => {
               setActiveTab('test');
               setReflectPart('moments');
-              handleNavigateStepSlug(MIND_MOMENT_SLUGS[0], true);
+              handleNavigateStepSlug(BASELINE_STEP_SLUGS[0], true);
             }}
             onUnlockPro={(msg) => handleUnlockPro(msg)}
             onSharePortrait={handleSharePortrait}

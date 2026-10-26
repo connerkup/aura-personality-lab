@@ -9,6 +9,7 @@ import {
   morphQuestionForContext,
   selectNextAdaptiveQuestionClient,
 } from '../data/adaptivePool120';
+import { BASELINE_STEP_SLUGS } from '../data/deconfoundingEngine';
 import { LIKERT_OPTIONS } from '../data/scienceBundle';
 import {
   ItemBankQuestion,
@@ -31,6 +32,12 @@ export function getQuestionSlug(q: ItemBankQuestion): string {
   return getAdaptiveQuestionSlug(q);
 }
 
+const LEGACY_MOMENT_SLUG_MAP: Record<string, string> = {
+  'moment-still-water': BASELINE_STEP_SLUGS[0],
+  'moment-night-sky': BASELINE_STEP_SLUGS[2],
+  'moment-inner-canvas': BASELINE_STEP_SLUGS[5],
+};
+
 export type FlowStepItem =
   | {
       kind: 'question';
@@ -41,7 +48,7 @@ export type FlowStepItem =
   | {
       kind: 'moment';
       slug: string;
-      momentIndex: 0 | 1 | 2;
+      momentIndex: number;
     };
 
 interface QuietReflectionProps {
@@ -51,6 +58,7 @@ interface QuietReflectionProps {
   dynamicQuestionIds?: number[];
   onChangeDynamicQuestionIds?: (nextIds: number[]) => void;
   userContext?: UserContextProfile;
+  onChangeUserContext?: (nextCtx: UserContextProfile) => void;
   currentQIdx: number;
   currentStepSlug: string;
   reflectPart: 'questions' | 'moments';
@@ -70,6 +78,7 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   dynamicQuestionIds,
   onChangeDynamicQuestionIds,
   userContext = DEFAULT_USER_CONTEXT,
+  onChangeUserContext,
   currentQIdx,
   currentStepSlug,
   reflectPart,
@@ -120,6 +129,7 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       committedIds,
       responses,
       telemetry: currentTel,
+      userContext,
       targetLength: 15,
     });
 
@@ -137,32 +147,19 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       .filter((q): q is ItemBankQuestion => Boolean(q));
 
     return resolved.length > 0 ? resolved : effectivePool.slice(0, 15);
-  }, [effectivePool, committedIds, responses, currentStepSlug, currentQIdx]);
+  }, [effectivePool, committedIds, responses, userContext, currentStepSlug, currentQIdx]);
 
-  // Unified 4-Phase Neurological-First sequence (18 steps total):
-  // Phase 1 (Steps 01..03 / 18): Mind Moment 1 (Still Water), Mind Moment 2 (Night Sky), Mind Moment 3 (Inner Canvas)
-  //   -> Establishes the user's neurological/cognitive baseline theta_0(m) BEFORE any self-report questions!
-  // Phase 2 (Steps 04..08 / 18): Q1..Q5 (Broad & disarming everyday snapshots seeded by Phase 1 telemetry)
-  // Phase 3 (Steps 09..14 / 18): Q6..Q11 (Targeted conditional IF/THEN branch_probe items untangling tensions)
-  // Phase 4 (Steps 15..18 / 18): Q12..Q15 (High-discrimination 2PL deep_resolution items pinning 10 DeYoung Aspects)
+  // Unified 4-Phase Context & De-Confounding First sequence (23 steps total):
+  // Phase 1 (Steps 01..08 / 23): 8-Step, 14-Factor State, Culture, Faith, Neurotype & Life-Context Calibration Baseline
+  // Phase 2 (Steps 09..13 / 23): Q1..Q5 (Broad & disarming everyday snapshots seeded by Phase 1 baseline priors)
+  // Phase 3 (Steps 14..19 / 23): Q6..Q11 (Targeted conditional IF/THEN branch_probe items untangling tensions)
+  // Phase 4 (Steps 20..23 / 23): Q12..Q15 (High-discrimination 2PL deep_resolution items pinning 10 DeYoung Aspects)
   const interwovenSteps = useMemo<FlowStepItem[]>(() => {
-    const steps: FlowStepItem[] = [
-      {
-        kind: 'moment',
-        slug: MIND_MOMENT_SLUGS[0],
-        momentIndex: 0,
-      },
-      {
-        kind: 'moment',
-        slug: MIND_MOMENT_SLUGS[1],
-        momentIndex: 1,
-      },
-      {
-        kind: 'moment',
-        slug: MIND_MOMENT_SLUGS[2],
-        momentIndex: 2,
-      },
-    ];
+    const steps: FlowStepItem[] = BASELINE_STEP_SLUGS.map((slug, idx) => ({
+      kind: 'moment',
+      slug,
+      momentIndex: idx,
+    }));
 
     flowQuestions.forEach((q, qIdx) => {
       steps.push({
@@ -177,17 +174,20 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   }, [flowQuestions]);
 
   const activeStepIndex = useMemo(() => {
+    const resolvedSlug =
+      (currentStepSlug && LEGACY_MOMENT_SLUG_MAP[currentStepSlug]) || currentStepSlug;
+
     if (reflectPart === 'moments') {
       const foundMoment = interwovenSteps.findIndex(
-        (s) => s.kind === 'moment' && s.slug === currentStepSlug
+        (s) => s.kind === 'moment' && s.slug === resolvedSlug
       );
       if (foundMoment >= 0) return foundMoment;
       const firstMoment = interwovenSteps.findIndex((s) => s.kind === 'moment');
       return firstMoment >= 0 ? firstMoment : 0;
     }
 
-    if (currentStepSlug) {
-      const idxBySlug = interwovenSteps.findIndex((s) => s.slug === currentStepSlug);
+    if (resolvedSlug) {
+      const idxBySlug = interwovenSteps.findIndex((s) => s.slug === resolvedSlug);
       if (idxBySlug >= 0) return idxBySlug;
     }
 
@@ -201,16 +201,11 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   const activeStep = interwovenSteps[activeStepIndex] || interwovenSteps[0];
   const totalStepsCount = interwovenSteps.length;
 
-  // Harmonize palette automatically when entering a Mind Moment
+  // Harmonize palette gently across the 8 Phase 1 baseline steps
   useEffect(() => {
     if (activeStep?.kind === 'moment') {
-      if (activeStep.momentIndex === 0) {
-        onSelectPalette(3); // Forest Breath for Still Water
-      } else if (activeStep.momentIndex === 1) {
-        onSelectPalette(4); // Cosmic Stillness for Night Sky
-      } else if (activeStep.momentIndex === 2) {
-        onSelectPalette(2); // Golden Hour for Inner Canvas
-      }
+      const lightPalettes = [0, 2, 3];
+      onSelectPalette(lightPalettes[activeStep.momentIndex % lightPalettes.length]);
     }
   }, [activeStep?.kind, activeStep?.kind === 'moment' ? activeStep.momentIndex : -1, onSelectPalette]);
 
@@ -286,6 +281,7 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
           answeredIds: nextCommitted,
           responses: nextResponses,
           telemetry: AuraMicroGamesBridge.getState(),
+          userContext,
         });
         if (sel.nextItem && !nextCommitted.includes(sel.nextItem.id)) {
           nextCommitted.push(sel.nextItem.id);
@@ -406,36 +402,33 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
   );
 
   const handleCompleteSingleMoment = useCallback(
-    (momentIdx: 0 | 1 | 2, latestTel: TelemetryState) => {
-      // Phase 1 Step 01 -> Step 02 (Still Water -> Night Sky)
-      if (momentIdx === 0) {
+    (
+      momentIdx: number,
+      latestTel: TelemetryState,
+      updatedCtx?: UserContextProfile
+    ) => {
+      // Phase 1 Steps 01..07 -> advance to next Baseline Step (02..08)
+      if (momentIdx < BASELINE_STEP_SLUGS.length - 1) {
         if (reflectPart !== 'moments') {
           onSwitchReflectPart('moments');
         }
-        onNavigateStepSlug(MIND_MOMENT_SLUGS[1], true);
-        return;
-      }
-      // Phase 1 Step 02 -> Step 03 (Night Sky -> Inner Canvas)
-      if (momentIdx === 1) {
-        if (reflectPart !== 'moments') {
-          onSwitchReflectPart('moments');
-        }
-        onNavigateStepSlug(MIND_MOMENT_SLUGS[2], true);
+        onNavigateStepSlug(BASELINE_STEP_SLUGS[momentIdx + 1], true);
         return;
       }
 
-      // Phase 1 Step 03 (Inner Canvas) completed!
+      // Phase 1 Step 08 (baseline-daily-constraints) completed!
       if (momentsDirectSequence) {
         onFinishToPortrait(latestTel);
         return;
       }
 
-      // Use the completed 3-game neurological baseline (theta_0(m)) to select Question 1 (Step 04/18, Phase 2)
+      // Use the completed 8-Step, 14-Factor De-Confounding Baseline to select Question 1 (Step 09/23, Phase 2)
       const sel = selectNextAdaptiveQuestionClient({
         pool: effectivePool,
         answeredIds: [],
         responses,
         telemetry: latestTel,
+        userContext: updatedCtx || userContext,
       });
       if (sel.nextItem) {
         updateCommittedIds([sel.nextItem.id]);
@@ -465,6 +458,7 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       responses,
       totalStepsCount,
       updateCommittedIds,
+      userContext,
     ]
   );
 
@@ -625,8 +619,8 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
                   : activeStep.kind === 'question' && activeStep.questionIndex >= 5
                   ? '· ✦ Phase 3 · Branched'
                   : isBranchedItem
-                  ? '· ✦ Phase 2 · Neuro-Routed'
-                  : `· Phase 2 · Baseline (${effectivePool.length})`}
+                  ? '· ✦ Phase 2 · Context-Routed'
+                  : `· Phase 2 · De-Confounded (${effectivePool.length})`}
               </span>
             </div>
 
@@ -669,15 +663,17 @@ export const QuietReflection: React.FC<QuietReflectionProps> = ({
       )}
 
       {/* ====================================================================
-          ACTIVE STEP: WEIGHTLESS MIND MOMENT INTERLUDE
+          ACTIVE STEP: WEIGHTLESS 14-FACTOR BASELINE CALIBRATION
          ==================================================================== */}
       {activeStep.kind === 'moment' && (
         <div id="reflect-part-moments" className="typeform-canvas-wrap">
           <div className="typeform-moment-stage">
             <MindMoments
               activeMomentIndex={activeStep.momentIndex}
+              userContext={userContext}
+              onChangeUserContext={onChangeUserContext}
               onSelectMomentIndex={(idx) => {
-                onNavigateStepSlug(MIND_MOMENT_SLUGS[idx], true);
+                onNavigateStepSlug(BASELINE_STEP_SLUGS[idx] || MIND_MOMENT_SLUGS[0], true);
               }}
               onCompleteSingleMoment={handleCompleteSingleMoment}
               onAllComplete={(tel) => {

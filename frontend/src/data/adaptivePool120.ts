@@ -14,6 +14,7 @@ import {
   TelemetryState,
   UserContextProfile,
 } from '../types/aura';
+import { compute14FactorDeconfounding } from './deconfoundingEngine';
 
 export const EXACT_15_SLUGS: Record<number, string> = {
   1: 'q-01-deeper-patterns',
@@ -2740,14 +2741,26 @@ export function findQuestionBySlugOrId(
 export function computeLiveDomainPosteriors(
   pool: ItemBankQuestion[],
   responses: Record<string | number, number>,
-  telemetry?: Partial<TelemetryState> | Record<string, unknown> | null
+  telemetry?: Partial<TelemetryState> | Record<string, unknown> | null,
+  userContext?: Partial<UserContextProfile> | null
 ): Record<DomainKey, DomainPosterior> {
   const effectivePool = pool && pool.length > 0 ? pool : ADAPTIVE_POOL_120;
   const result = {} as Record<DomainKey, DomainPosterior>;
 
-  // Phase 1 Neurological Baseline Priors from the 3 Mind Moments
+  // Phase 1 Baseline Priors from the 8-Step, 14-Factor De-Confounding Calibration + Telemetry
   const priorShift: Record<DomainKey, number> = { O: 0, C: 0, E: 0, A: 0, N: 0 };
   const priorWeight: Record<DomainKey, number> = { O: 0, C: 0, E: 0, A: 0, N: 0 };
+
+  if (userContext && typeof userContext === 'object') {
+    const deconf = compute14FactorDeconfounding(userContext, responses);
+    for (const d of DOMAIN_KEYS) {
+      const deltaPct = deconf.domain_deltas[d] || 0;
+      if (Math.abs(deltaPct) >= 0.5) {
+        priorShift[d] += clamp(deltaPct / 28.0, -0.55, 0.55);
+        priorWeight[d] += 0.42;
+      }
+    }
+  }
 
   if (telemetry && typeof telemetry === 'object') {
     const t = telemetry as Record<string, any>;
@@ -2865,18 +2878,25 @@ export function selectNextAdaptiveQuestionClient(params: {
   answeredIds: number[];
   responses: Record<string | number, number>;
   telemetry?: Partial<TelemetryState> | Record<string, unknown> | null;
+  userContext?: Partial<UserContextProfile> | null;
 }): AdaptiveSelectionResult {
   const effectivePool =
     params.pool && params.pool.length >= 20 ? params.pool : ADAPTIVE_POOL_120;
   const answeredSet = new Set((params.answeredIds || []).map(Number));
   const responses = params.responses || {};
   const telemetry = params.telemetry || null;
+  const userContext = params.userContext || null;
 
-  const domainPosteriors = computeLiveDomainPosteriors(effectivePool, responses, telemetry);
+  const domainPosteriors = computeLiveDomainPosteriors(
+    effectivePool,
+    responses,
+    telemetry,
+    userContext
+  );
   const stepNumber = answeredSet.size + 1;
 
-  // 4-Phase Neurological-First Funnel:
-  // Phase 1: Mind Moments 1..3 (Neurological Baseline, completed before Question 1)
+  // 4-Phase Context & De-Confounding First Funnel:
+  // Phase 1: 8-Step, 14-Factor De-Confounding Baseline (completed before Question 1)
   // Phase 2 (Question steps 1..5): Warm Everyday Rhythm & Symmetry-Breaking Anchors ('anchor')
   // Phase 3 (Question steps 6..11): Targeted Conditional IF/THEN Branch Probes ('branch_probe')
   // Phase 4 (Question steps 12..15): High-Discrimination 2PL Deep Nuance Resolution ('deep_resolution')
@@ -2907,12 +2927,21 @@ export function selectNextAdaptiveQuestionClient(params: {
       ? Number(params.answeredIds[params.answeredIds.length - 1])
       : null;
 
-  // Extract Phase 1 Mind Moment telemetry signals for adaptive routing
-  let pulseHighVariance = false;
-  let pulseSteadyTonic = false;
-  let constellationHighPrecision = false;
-  let mindsEyeConceptual = false;
-  let mindsEyeVividCinema = false;
+  // Extract Phase 1 Baseline & Neurotype signals for adaptive routing
+  let pulseHighVariance =
+    userContext?.attentionEngine === 'interest_hyperfocus' ||
+    userContext?.attentionEngine === 'nonlinear_explorer';
+  let pulseSteadyTonic = userContext?.attentionEngine === 'linear_checklist';
+  let constellationHighPrecision = userContext?.attentionEngine === 'deep_systemizer';
+  let mindsEyeConceptual = userContext?.innerModality === 'wordless_concept';
+  let mindsEyeVividCinema = userContext?.innerModality === 'visual_cinema';
+  const isStretchedBandwidth =
+    userContext?.bandwidthState === 'stretched_thin' ||
+    userContext?.bandwidthState === 'running_on_fumes' ||
+    userContext?.bandwidthState === 'high_pressure_sprint';
+  const isDeconstructingFaith =
+    userContext?.faithTrajectory === 'strict_to_independent';
+
   if (telemetry && typeof telemetry === 'object') {
     const t = telemetry as Record<string, any>;
     if (t.pulse_reaction?.completed) {
@@ -2978,10 +3007,13 @@ export function selectNextAdaptiveQuestionClient(params: {
 
     let stage_bonus = 0.0;
     if (stepNumber === 1) {
-      // First question after Phase 1 Neurological Baseline:
-      // Route gently based on what Still Water, Night Sky, and Inner Canvas revealed!
+      // First question after Phase 1 8-Step De-Confounding Baseline:
       if (pulseHighVariance && (it.id === 13 || it.id === 3)) {
         stage_bonus = it.id === 13 ? 2.85 : 2.65;
+      } else if (isDeconstructingFaith && (it.id === 1 || it.id === 8)) {
+        stage_bonus = it.id === 1 ? 2.85 : 2.65;
+      } else if (isStretchedBandwidth && (it.id === 12 || it.id === 11)) {
+        stage_bonus = it.id === 12 ? 2.80 : 2.68;
       } else if (mindsEyeConceptual && it.id === 1) {
         stage_bonus = 2.85;
       } else if (pulseSteadyTonic && (it.id === 12 || it.id === 1)) {
@@ -3013,7 +3045,7 @@ export function selectNextAdaptiveQuestionClient(params: {
       else stage_bonus = 0.20;
     }
 
-    // Telemetry-informed routing bonus from Phase 1 Mind Moments
+    // Telemetry & 14-Factor Baseline routing bonus
     let telemetry_bonus = 0.0;
     if (
       pulseHighVariance &&
@@ -3045,7 +3077,7 @@ export function selectNextAdaptiveQuestionClient(params: {
 
     const reasons: string[] = [];
     if (telemetry_bonus > 0 && stepNumber <= 5) {
-      reasons.push(`Phase 1 Mind Moment Baseline Prior (+${telemetry_bonus.toFixed(2)})`);
+      reasons.push(`Phase 1 14-Factor Baseline Prior (+${telemetry_bonus.toFixed(2)})`);
     }
     if (trigEval.triggered && trigEval.description) {
       const parentAns =
@@ -3059,7 +3091,7 @@ export function selectNextAdaptiveQuestionClient(params: {
       } (SE ±${domPost.se}%)`
     );
     if (telemetry_bonus > 0 && stepNumber > 5) {
-      reasons.push(`Mind Moment Telemetry Prior (+${telemetry_bonus.toFixed(2)})`);
+      reasons.push(`14-Factor Baseline Prior (+${telemetry_bonus.toFixed(2)})`);
     }
 
     return {
@@ -3099,6 +3131,7 @@ export function buildDynamicAdaptivePath(params: {
   committedIds: number[];
   responses: Record<string | number, number>;
   telemetry?: Partial<TelemetryState> | Record<string, unknown> | null;
+  userContext?: Partial<UserContextProfile> | null;
   targetLength?: number;
 }): number[] {
   const effectivePool =
@@ -3115,7 +3148,6 @@ export function buildDynamicAdaptivePath(params: {
   }
 
   // Project remaining slots up to targetLength (15) using selectNextAdaptiveQuestionClient
-  // (including Question 1 when path is initially empty, routed by Phase 1 Mind Moment telemetry!)
   const simulatedResponses: Record<string | number, number> = { ...(params.responses || {}) };
   while (path.length < targetLen && path.length < effectivePool.length) {
     const sel = selectNextAdaptiveQuestionClient({
@@ -3123,6 +3155,7 @@ export function buildDynamicAdaptivePath(params: {
       answeredIds: path,
       responses: simulatedResponses,
       telemetry: params.telemetry,
+      userContext: params.userContext,
     });
     if (!sel.nextItem || path.includes(sel.nextItem.id)) {
       const nextFallback = effectivePool.find((q) => !path.includes(q.id));
@@ -3145,6 +3178,23 @@ export const DEFAULT_USER_CONTEXT: UserContextProfile = {
   lifeContext: 'knowledge_remote',
   locale: 'urban',
   language: 'en',
+  bandwidthState: 'steady_engaged',
+  lifeTransition: 'steady_chapter',
+  socialBatteryState: 'calm_even',
+  chronotype: 'midday_flexible',
+  countryRaised: 'us_canada',
+  countryCurrent: 'us_canada',
+  socializedExpectation: 'egalitarian_balanced',
+  upbringingScript: 'direct_autonomy',
+  familyRole: 'independent_middle',
+  faithTrajectory: 'secular_practical',
+  attentionEngine: 'linear_checklist',
+  sensoryThreshold: 'moderate_sensory',
+  innerModality: 'visual_cinema',
+  workRoleBleed: 'natural_match',
+  scheduleAutonomy: 'self_directed',
+  householdSpace: 'solo_space',
+  resourceCushion: 'self_managed_admin',
 };
 
 export const AGE_BAND_OPTIONS: { id: AgeBand; label: string; short: string }[] = [
