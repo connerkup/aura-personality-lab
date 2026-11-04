@@ -9,16 +9,283 @@ import {
   FaithTrajectory,
   FamilyRoleNiche,
   HouseholdSpace,
+  InnerModality,
   LifeTransitionState,
   ResourceCushionType,
   ScheduleAutonomy,
   SensoryThresholdType,
   SocialBatteryState,
   SocializedExpectation,
+  TelemetryProfile,
+  TelemetryState,
   UpbringingScript,
   UserContextProfile,
   WorkRoleBleedType,
 } from './types/aura';
+
+function clamp(val: number, low: number = 2.0, high: number = 98.0): number {
+  return Math.max(low, Math.min(high, val));
+}
+
+function isFiniteNumeric(val: unknown): boolean {
+  if (typeof val === 'number') return Number.isFinite(val);
+  if (typeof val === 'string' && val.trim().length > 0) return Number.isFinite(Number(val));
+  return false;
+}
+
+export function toFiniteNumber(val: unknown, fallback: number): number {
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  if (typeof val === 'string' && val.trim().length > 0) {
+    const parsed = Number(val);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+export function roundHalfToEven(n: number, decimals: number = 0): number {
+  if (!Number.isFinite(n)) return 0;
+  const factor = Math.pow(10, decimals);
+  const scaled = n * factor;
+  const floor = Math.floor(scaled);
+  const diff = scaled - floor;
+  const rounded =
+    Math.abs(diff - 0.5) <= 1e-9 ? (floor % 2 === 0 ? floor : floor + 1) : Math.round(scaled);
+  const res = decimals > 0 ? Number((rounded / factor).toFixed(decimals)) : rounded;
+  return Object.is(res, -0) ? 0 : res;
+}
+
+export interface NormalizedTelemetry {
+  provided: boolean;
+  median_rt_ms: number;
+  rt_cv_pct: number;
+  rt_steadiness_pct: number;
+  false_starts: number;
+  memory_accuracy_pct: number;
+  mean_chunk_ms: number;
+  imagery_vividness: number;
+  inner_modality: InnerModality;
+}
+
+export function computeAphantasiaBoost(imageryVividness: unknown): number {
+  const v = toFiniteNumber(imageryVividness, 62.0);
+  if (v <= 25.0) {
+    const vClamped = Math.max(0.0, Math.min(25.0, v));
+    return roundHalfToEven(5.0 + 9.0 * ((25.0 - vClamped) / 25.0), 1);
+  }
+  return 0.0;
+}
+
+export function normalizeTelemetry(
+  telemetry?: Partial<TelemetryState> | Record<string, unknown> | null
+): NormalizedTelemetry {
+  if (!telemetry || typeof telemetry !== 'object' || Object.keys(telemetry).length === 0) {
+    const rt_cv = 14.5;
+    return {
+      provided: false,
+      median_rt_ms: 290.0,
+      rt_cv_pct: rt_cv,
+      rt_steadiness_pct: roundHalfToEven(clamp(100.0 - Math.max(0.0, rt_cv - 6.0) * 1.85, 12.0, 99.0), 1),
+      false_starts: 0,
+      memory_accuracy_pct: 78.0,
+      mean_chunk_ms: 420.0,
+      imagery_vividness: 62.0,
+      inner_modality: 'visual_cinema',
+    };
+  }
+
+  const tel = telemetry as Record<string, unknown>;
+  const asObj = (x: unknown): Record<string, unknown> =>
+    x && typeof x === 'object' ? (x as Record<string, unknown>) : {};
+  const pulse = asObj(tel.pulse_reaction);
+  const constellation = asObj(tel.constellation_memory);
+  const mindsEye = asObj(tel.minds_eye);
+
+  const pickNum = (sub: Record<string, unknown>, keys: string[], def: number): number => {
+    for (const k of keys) {
+      if (k in sub && isFiniteNumeric(sub[k])) return toFiniteNumber(sub[k], def);
+      if (k in tel && isFiniteNumeric(tel[k])) return toFiniteNumber(tel[k], def);
+    }
+    return def;
+  };
+  const pickRaw = (sub: Record<string, unknown>, keys: string[], def: unknown): unknown => {
+    for (const k of keys) {
+      if (k in sub && sub[k] !== null && sub[k] !== undefined) return sub[k];
+      if (k in tel && tel[k] !== null && tel[k] !== undefined) return tel[k];
+    }
+    return def;
+  };
+
+  const median_rt_ms = pickNum(pulse, ['median_rt_ms', 'rt_ms'], 290.0);
+  let rt_cv_pct = pickNum(pulse, ['rt_cv_pct', 'cv_pct'], 14.5);
+  const false_starts = Math.max(0, Math.trunc(pickNum(pulse, ['false_starts'], 0)));
+
+  const hasExplicitSteadiness = ['rt_steadiness_pct', 'steadiness_pct'].some(
+    (k) => isFiniteNumeric(pulse[k]) || isFiniteNumeric(tel[k])
+  );
+  const hasExplicitRtCv = ['rt_cv_pct', 'cv_pct'].some(
+    (k) => isFiniteNumeric(pulse[k]) || isFiniteNumeric(tel[k])
+  );
+
+  let rt_steadiness_pct: number;
+  if (hasExplicitSteadiness && !hasExplicitRtCv) {
+    rt_steadiness_pct = clamp(pickNum(pulse, ['rt_steadiness_pct', 'steadiness_pct'], 84.3), 10.0, 99.0);
+    rt_cv_pct = roundHalfToEven(Math.max(4.0, (100.0 - rt_steadiness_pct) / 1.85 + 6.0), 1);
+  } else if (hasExplicitSteadiness) {
+    rt_steadiness_pct = roundHalfToEven(
+      clamp(pickNum(pulse, ['rt_steadiness_pct', 'steadiness_pct'], 84.3), 10.0, 99.0),
+      1
+    );
+  } else {
+    rt_steadiness_pct = roundHalfToEven(
+      clamp(100.0 - Math.max(0.0, rt_cv_pct - 6.0) * 1.85, 12.0, 99.0),
+      1
+    );
+  }
+
+  const memory_accuracy_pct = clamp(
+    pickNum(constellation, ['accuracy_pct', 'memory_accuracy_pct'], 78.0),
+    0.0,
+    100.0
+  );
+  const mean_chunk_ms = pickNum(constellation, ['mean_chunk_ms', 'chunk_ms'], 420.0);
+  const imagery_vividness = clamp(
+    pickNum(mindsEye, ['imagery_vividness', 'vividness'], 62.0),
+    0.0,
+    100.0
+  );
+
+  const defaultModality: InnerModality =
+    imagery_vividness <= 25.0 ? 'wordless_concept' : 'visual_cinema';
+  const rawModality = String(pickRaw(mindsEye, ['inner_modality', 'modality'], defaultModality));
+  const inner_modality: InnerModality =
+    rawModality === 'wordless_concept' ||
+    rawModality === 'inner_voice' ||
+    rawModality === 'visual_cinema'
+      ? rawModality
+      : defaultModality;
+
+  return {
+    provided: true,
+    median_rt_ms: roundHalfToEven(median_rt_ms, 1),
+    rt_cv_pct: roundHalfToEven(rt_cv_pct, 1),
+    rt_steadiness_pct: roundHalfToEven(rt_steadiness_pct, 1),
+    false_starts,
+    memory_accuracy_pct: roundHalfToEven(memory_accuracy_pct, 1),
+    mean_chunk_ms: roundHalfToEven(mean_chunk_ms, 1),
+    imagery_vividness: roundHalfToEven(imagery_vividness, 1),
+    inner_modality,
+  };
+}
+
+export function buildTelemetryProfile(
+  telemetry?: Partial<TelemetryState> | Record<string, unknown> | null
+): TelemetryProfile {
+  const norm = normalizeTelemetry(telemetry);
+  const {
+    imagery_vividness: vivid,
+    inner_modality: modality,
+    median_rt_ms: rt_ms,
+    rt_cv_pct: rt_cv,
+    rt_steadiness_pct: steadiness,
+    false_starts,
+    memory_accuracy_pct: mem_acc,
+    mean_chunk_ms: chunk_ms,
+  } = norm;
+
+  const aphantasia_boost = computeAphantasiaBoost(vivid);
+  const boostInt = roundHalfToEven(aphantasia_boost, 0);
+
+  let minds_eye_tier = 'hyperphantasia_cinema';
+  let minds_eye_label = 'Cinema-Grade Visual Mind (Hyperphantasia Spectrum)';
+  let minds_eye_calm_note =
+    'Your inner world renders in cinema-grade light, texture, and motion—allowing you to replay memories and simulate future possibilities almost as vividly as seeing them in person.';
+
+  if (vivid <= 18.0) {
+    minds_eye_tier = 'aphantasia_concept_first';
+    minds_eye_label =
+      modality === 'inner_voice'
+        ? 'Concept-First & Inner-Voice Mind (Aphantasia Spectrum)'
+        : 'Concept-First Mind (Aphantasia Spectrum)';
+    minds_eye_calm_note = `Your mind works like a quiet architect: instead of projecting literal pictures behind your eyes, you hold rich, wordless models of how ideas, spaces, and feelings fit together. Because standard personality tests often mistake 'not seeing mental pictures' for having less imagination, we gently adjusted your Curiosity & Imagination portrait (+${boostInt}%) to honor your true conceptual depth.`;
+  } else if (vivid <= 25.0) {
+    minds_eye_tier = 'aphantasia_spectrum_sketch';
+    minds_eye_label = 'Concept-First Mind (Aphantasia Spectrum)';
+    minds_eye_calm_note = `You imagine primarily through pure meaning, spatial intuition, and subtle conceptual outlines rather than vivid visual pictures. Because visual-worded questionnaires under-count non-visual imagination, we gently adjusted your Curiosity & Imagination portrait (+${boostInt}%) so your conceptual creativity shines through.`;
+  } else if (vivid <= 45.0) {
+    minds_eye_tier = 'soft_sketch_imagery';
+    minds_eye_label =
+      modality === 'inner_voice'
+        ? 'Deep Inner-Voice & Soft-Sketch Mind'
+        : modality === 'wordless_concept'
+        ? 'Concept-Led Soft-Sketch Mind'
+        : 'Soft-Sketch Imagery Mind';
+    minds_eye_calm_note =
+      'You think through meaning, voice, and light gestural impressions rather than heavy visual detail—letting your mind move quickly to the heart of an idea without getting bogged down in surface rendering.';
+  } else if (vivid <= 80.0) {
+    minds_eye_tier = 'vivid_mental_imagery';
+    minds_eye_label =
+      modality === 'inner_voice'
+        ? 'Deep Inner-Voice & Vivid Visual Mind'
+        : modality === 'wordless_concept'
+        ? 'Conceptual & Vivid Visual Mind'
+        : 'Vivid Visual Mind';
+    minds_eye_calm_note =
+      "You can readily call up clear scenes, atmospheres, and memories in your mind's eye, blending visual imagery smoothly with your everyday intuition and inner voice.";
+  }
+
+  let attentional_cadence_label = 'Steady & Measured Cadence';
+  let attentional_cadence_calm_note =
+    'Your attention locks in with an even, grounded rhythm—giving you steady pacing across both quiet and fast-moving moments.';
+  if (rt_cv > 22.0 || false_starts >= 2) {
+    attentional_cadence_label = 'Quick-Spark & Dynamic Cadence';
+    attentional_cadence_calm_note =
+      'Your attention moves in quick, high-energy bursts—anticipating what comes next and surging fastest when a moment feels alive, novel, and meaningful.';
+  } else if (rt_ms >= 335.0 && rt_cv <= 20.0) {
+    attentional_cadence_label = 'Deliberate & Unhurried Cadence';
+    attentional_cadence_calm_note =
+      'Your mind takes a calm beat to verify the signal before acting, trading rushed reflexes for steady, unhurried certainty.';
+  }
+
+  let pattern_memory_label = 'Big-Picture Impression Memory';
+  let pattern_memory_calm_note =
+    'Your mind captures the overall gesture and flow of a space rather than holding onto rigid grid coordinates.';
+  let pattern_synthesis_boost = 0.0;
+  if (mem_acc >= 80.0 && chunk_ms <= 430.0) {
+    pattern_memory_label = 'Holistic Constellation Memory';
+    pattern_memory_calm_note =
+      'Instead of memorizing isolated points one by one, your mind naturally compresses the whole geometry into a single connected shape.';
+    pattern_synthesis_boost = roundHalfToEven(
+      Math.min(4.5, (mem_acc - 75.0) * 0.1 + Math.max(0.0, 430.0 - chunk_ms) * 0.012),
+      1
+    );
+  } else if (mem_acc >= 75.0) {
+    pattern_memory_label = 'Careful Structural Memory';
+    pattern_memory_calm_note =
+      'You rebuild complex patterns step by step with deliberate care, making sure each piece fits before placing the next.';
+    pattern_synthesis_boost = 1.5;
+  }
+
+  return {
+    minds_eye_label,
+    minds_eye_tier,
+    minds_eye_calm_note,
+    attentional_cadence_label,
+    attentional_cadence_calm_note,
+    pattern_memory_label,
+    pattern_memory_calm_note,
+    median_rt_ms: rt_ms,
+    rt_cv_pct: rt_cv,
+    rt_steadiness_pct: steadiness,
+    false_starts,
+    memory_accuracy_pct: mem_acc,
+    mean_chunk_ms: chunk_ms,
+    imagery_vividness: vivid,
+    inner_modality: modality,
+    aphantasia_deconfounder_applied: aphantasia_boost > 0.0,
+    aphantasia_openness_boost_pct: aphantasia_boost,
+    pattern_synthesis_boost_pct: pattern_synthesis_boost,
+  };
+}
 
 export const BASELINE_STEP_SLUGS: string[] = [
   'baseline-bandwidth',
@@ -390,20 +657,27 @@ export const WORK_ROLE_BLEED_OPTIONS: {
 
 export function compute14FactorDeconfounding(
   ctx?: Partial<UserContextProfile> | null,
-  responses?: Record<string | number, number>
+  responses?: Record<string | number, number> | null,
+  telemetry?: Partial<TelemetryState> | Record<string, unknown> | null
 ): DeconfoundingSummary {
   const domain_deltas: Record<DomainKey, number> = { O: 0, C: 0, E: 0, A: 0, N: 0 };
   const aspect_deltas: Record<string, number> = {};
   const active_adjustments: ConfoundAdjustmentItem[] = [];
 
-  if (!ctx) {
-    return {
-      domain_deltas,
-      aspect_deltas,
-      bicultural_active: false,
-      scale_bias_note: 'Standard calibration',
-      active_adjustments,
-    };
+  const normTel = normalizeTelemetry(telemetry);
+  const telProfile = normTel.provided ? buildTelemetryProfile(telemetry) : null;
+
+  if (!ctx || typeof ctx !== 'object') {
+    if (!telProfile) {
+      return {
+        domain_deltas,
+        aspect_deltas,
+        bicultural_active: false,
+        scale_bias_note: 'Standard calibration',
+        active_adjustments,
+      };
+    }
+    ctx = {};
   }
 
   // 1. Confound #1 & #13: Transient Bandwidth & Major Life Transition
@@ -641,8 +915,14 @@ export function compute14FactorDeconfounding(
     aspect_deltas.O_openness = (aspect_deltas.O_openness || 0) + 6;
   }
 
-  // 6. Confound #8: Neurotype, Attention Engine & Sensory Processing
-  if (ctx.attentionEngine === 'interest_hyperfocus' || ctx.attentionEngine === 'nonlinear_explorer') {
+  // 6. Confound #8: Neurotype, Attention Engine, Sensory Processing & Cognitive Telemetry
+  if (
+    ctx.attentionEngine === 'interest_hyperfocus' ||
+    ctx.attentionEngine === 'nonlinear_explorer' ||
+    (!ctx.attentionEngine &&
+      telProfile &&
+      (telProfile.rt_cv_pct > 22.0 || telProfile.false_starts >= 2))
+  ) {
     domain_deltas.C += 12;
     aspect_deltas.C_industriousness = (aspect_deltas.C_industriousness || 0) + 15;
     domain_deltas.O += 6;
@@ -681,6 +961,49 @@ export function compute14FactorDeconfounding(
       explanation:
         'Separated acoustic/visual overstimulation in loud rooms (+9% dyadic E, -7% N) from social dislike.',
     });
+  }
+
+  if (telProfile && telProfile.aphantasia_deconfounder_applied) {
+    const aphantasiaDelta = roundHalfToEven(telProfile.aphantasia_openness_boost_pct, 0);
+    domain_deltas.O += aphantasiaDelta;
+    aspect_deltas.O_intellect = (aspect_deltas.O_intellect || 0) + aphantasiaDelta;
+    active_adjustments.push({
+      id: 'telemetry_aphantasia_deconfounder',
+      category: '8. Mind’s Eye Telemetry',
+      label: telProfile.minds_eye_label,
+      domain: 'O',
+      delta_pct: aphantasiaDelta,
+      explanation: telProfile.minds_eye_calm_note,
+    });
+  } else if (ctx.innerModality === 'wordless_concept') {
+    const aphantasiaDelta = 9;
+    domain_deltas.O += aphantasiaDelta;
+    aspect_deltas.O_intellect = (aspect_deltas.O_intellect || 0) + aphantasiaDelta;
+    active_adjustments.push({
+      id: 'telemetry_aphantasia_deconfounder',
+      category: '8. Mind’s Eye Telemetry',
+      label: 'Concept-First Mind (Aphantasia Spectrum)',
+      domain: 'O',
+      delta_pct: aphantasiaDelta,
+      explanation:
+        'Restored +9% Curiosity & Imagination (Openness) so non-visual conceptual imagination is not under-counted by visual-imagery items.',
+    });
+  }
+
+  if (telProfile && telProfile.pattern_synthesis_boost_pct > 0) {
+    const patBoost = roundHalfToEven(telProfile.pattern_synthesis_boost_pct, 0);
+    if (patBoost > 0) {
+      domain_deltas.O += patBoost;
+      aspect_deltas.O_intellect = (aspect_deltas.O_intellect || 0) + patBoost;
+      active_adjustments.push({
+        id: 'telemetry_pattern_synthesis',
+        category: '8. Constellation Memory Telemetry',
+        label: telProfile.pattern_memory_label,
+        domain: 'O',
+        delta_pct: patBoost,
+        explanation: telProfile.pattern_memory_calm_note,
+      });
+    }
   }
 
   // 7. Confound #10: Occupational Role Bleed ("9-to-5 Work Persona")
@@ -804,10 +1127,11 @@ export function compute14FactorDeconfounding(
 
   // 9. Confound #7: Within-Person Scale-Usage Normalization (Modesty vs. Extreme Responding)
   let scale_bias_note = 'Balanced 1–5 scale usage';
-  if (responses && Object.keys(responses).length >= 4) {
+  if (responses && typeof responses === 'object' && Object.keys(responses).length >= 4) {
     const vals = Object.values(responses)
-      .map(Number)
-      .filter((v) => !Number.isNaN(v) && v >= 1 && v <= 5);
+      .filter((v) => isFiniteNumeric(v))
+      .map((v) => toFiniteNumber(v, 0))
+      .filter((v) => v >= 1 && v <= 5);
     if (vals.length >= 4) {
       const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
       const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / vals.length;
@@ -822,9 +1146,12 @@ export function compute14FactorDeconfounding(
     }
   }
 
-  // Clamp domain deltas to a clean [-22, +22] range
+  // Clamp domain deltas to a clean [-22, +22] range with zero NaN propagation
   (['O', 'C', 'E', 'A', 'N'] as DomainKey[]).forEach((d) => {
-    domain_deltas[d] = Math.max(-22, Math.min(22, Math.round(domain_deltas[d])));
+    domain_deltas[d] = Math.max(-22, Math.min(22, roundHalfToEven(toFiniteNumber(domain_deltas[d], 0), 0)));
+  });
+  Object.keys(aspect_deltas).forEach((k) => {
+    aspect_deltas[k] = roundHalfToEven(toFiniteNumber(aspect_deltas[k], 0), 0);
   });
 
   return {

@@ -14,6 +14,10 @@ import {
   selectNextAdaptiveQuestionClient,
 } from './adaptivePool120';
 import {
+  buildTelemetryProfile,
+  compute14FactorDeconfounding,
+} from './deconfoundingEngine';
+import {
   ASPECT_LABELS,
   AspectKey,
   getOregonHoldoutBenchmarkSummaryClient,
@@ -374,8 +378,9 @@ export const StudioApp: React.FC = () => {
       answeredIds: prefixBeforeCurrent,
       responses: prefixResponses,
       telemetry: catTelemetry,
+      userContext: morphContext,
     });
-  }, [questions, catVisitedIds, catResponses, catTelemetry]);
+  }, [questions, catVisitedIds, catResponses, catTelemetry, morphContext]);
 
   // Next-Question Candidates Leaderboard given ALL answers so far
   const nextCatPreview = useMemo(() => {
@@ -385,8 +390,19 @@ export const StudioApp: React.FC = () => {
       answeredIds: answeredList,
       responses: catResponses,
       telemetry: catTelemetry,
+      userContext: morphContext,
     });
-  }, [questions, catVisitedIds, catResponses, catTelemetry]);
+  }, [questions, catVisitedIds, catResponses, catTelemetry, morphContext]);
+
+  const liveDeconfounding = useMemo(
+    () => compute14FactorDeconfounding(morphContext, catResponses, catTelemetry),
+    [morphContext, catResponses, catTelemetry]
+  );
+
+  const liveTelemetryProfile = useMemo(
+    () => buildTelemetryProfile(catTelemetry),
+    [catTelemetry]
+  );
 
   // Answer current question in CAT Simulator & advance to next adaptive branch
   const handleCatAnswerAndStep = useCallback(
@@ -397,7 +413,7 @@ export const StudioApp: React.FC = () => {
 
       // Update simulated Mind Moment telemetry automatically at step 4 (Still Water) and step 8 (Night Sky)
       const nextTel: TelemetryState = JSON.parse(JSON.stringify(catTelemetry));
-      if (catVisitedIds.length === 4 && !nextTel.pulse_reaction.completed) {
+      if (catVisitedIds.length === 4 && !nextTel.pulse_reaction?.completed) {
         const isSpark = (nextResp[3] ?? 3) >= 4;
         nextTel.pulse_reaction = {
           completed: true,
@@ -407,7 +423,7 @@ export const StudioApp: React.FC = () => {
           false_starts: isSpark ? 2 : 0,
         };
       }
-      if (catVisitedIds.length === 8 && !nextTel.constellation_memory.completed) {
+      if (catVisitedIds.length === 8 && !nextTel.constellation_memory?.completed) {
         const highPattern = (nextResp[1] ?? 3) >= 4;
         nextTel.constellation_memory = {
           completed: true,
@@ -415,7 +431,7 @@ export const StudioApp: React.FC = () => {
           mean_chunk_ms: highPattern ? 365 : 420,
         };
       }
-      if (catVisitedIds.length === 15 && !nextTel.minds_eye.completed) {
+      if (catVisitedIds.length === 15 && !nextTel.minds_eye?.completed) {
         nextTel.minds_eye = {
           completed: true,
           imagery_vividness: 68,
@@ -430,6 +446,7 @@ export const StudioApp: React.FC = () => {
           answeredIds: catVisitedIds,
           responses: nextResp,
           telemetry: nextTel,
+          userContext: morphContext,
         });
         if (nextSel.nextItem && !catVisitedIds.includes(nextSel.nextItem.id)) {
           const nextIds = [...catVisitedIds, nextSel.nextItem.id];
@@ -438,7 +455,7 @@ export const StudioApp: React.FC = () => {
         }
       }
     },
-    [catResponses, catTelemetry, catVisitedIds, currentCatQuestion, questions]
+    [catResponses, catTelemetry, catVisitedIds, currentCatQuestion, morphContext, questions]
   );
 
   // Auto-run an entire 15-question adaptive path for a Persona Preset
@@ -457,6 +474,7 @@ export const StudioApp: React.FC = () => {
         answeredIds: [],
         responses: {},
         telemetry: preset.telemetry,
+        userContext: morphContext,
       });
       const pathIds: number[] = [firstSel.nextItem ? firstSel.nextItem.id : 1];
       const simResp: Record<number, number> = {};
@@ -472,6 +490,7 @@ export const StudioApp: React.FC = () => {
             answeredIds: pathIds,
             responses: simResp,
             telemetry: preset.telemetry,
+            userContext: morphContext,
           });
           if (sel.nextItem && !pathIds.includes(sel.nextItem.id)) {
             pathIds.push(sel.nextItem.id);
@@ -487,7 +506,7 @@ export const StudioApp: React.FC = () => {
         `Simulated 15-step adaptive CAT path for "${preset.name}" across ${questions.length}-item pool`
       );
     },
-    [questions, showToast]
+    [morphContext, questions, showToast]
   );
 
   const handleResetCatSimulator = useCallback(() => {
@@ -557,7 +576,7 @@ export const StudioApp: React.FC = () => {
           stepOrder: order++,
           title: 'Still Water (RT CV)',
           slug: 'moment-still-water',
-          completed: catTelemetry.pulse_reaction.completed,
+          completed: Boolean(catTelemetry?.pulse_reaction?.completed),
         });
       } else if (idx === 7) {
         nodes.push({
@@ -565,7 +584,7 @@ export const StudioApp: React.FC = () => {
           stepOrder: order++,
           title: 'Night Sky (Chunking)',
           slug: 'moment-night-sky',
-          completed: catTelemetry.constellation_memory.completed,
+          completed: Boolean(catTelemetry?.constellation_memory?.completed),
         });
       } else if (idx === 14) {
         nodes.push({
@@ -573,7 +592,7 @@ export const StudioApp: React.FC = () => {
           stepOrder: order++,
           title: 'Inner Canvas (VVIQ)',
           slug: 'moment-inner-canvas',
-          completed: catTelemetry.minds_eye.completed,
+          completed: Boolean(catTelemetry?.minds_eye?.completed),
         });
       }
     });
@@ -1822,9 +1841,18 @@ export const StudioApp: React.FC = () => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {DOMAIN_LIST.map((dom) => {
-                  const post = nextCatPreview.domainPosteriors[dom];
-                  const lowPct = Math.max(2, post.percentile - post.se);
-                  const highPct = Math.min(98, post.percentile + post.se);
+                  const post = nextCatPreview.domainPosteriors?.[dom];
+                  const thetaVal = post?.theta;
+                  const pctVal = post?.percentile;
+                  const seVal = post?.se;
+                  const lowPct =
+                    Number.isFinite(pctVal) && Number.isFinite(seVal)
+                      ? Math.max(2, (pctVal as number) - (seVal as number))
+                      : 0;
+                  const highPct =
+                    Number.isFinite(pctVal) && Number.isFinite(seVal)
+                      ? Math.min(98, (pctVal as number) + (seVal as number))
+                      : 0;
                   return (
                     <div
                       key={dom}
@@ -1843,8 +1871,15 @@ export const StudioApp: React.FC = () => {
                           · {CALM_DIMENSION_LABELS[dom]?.name}
                         </span>
                         <span className="mono" style={{ fontSize: '11px', color: 'var(--emerald)' }}>
-                          θ={post.theta >= 0 ? `+${post.theta.toFixed(2)}` : post.theta.toFixed(2)} ·{' '}
-                          {post.percentile}% (±{post.se}% SE · n={post.answered_count} · ΣI={post.fisher_info_sum})
+                          θ=
+                          {Number.isFinite(thetaVal)
+                            ? (thetaVal as number) >= 0
+                              ? `+${(thetaVal as number).toFixed(2)}`
+                              : (thetaVal as number).toFixed(2)
+                            : 'n/a'}{' '}
+                          · {Number.isFinite(pctVal) ? `${pctVal}%` : 'n/a'} (±
+                          {Number.isFinite(seVal) ? `${seVal}%` : 'n/a'} SE · n={post?.answered_count ?? 0} · ΣI=
+                          {Number.isFinite(post?.fisher_info_sum) ? post.fisher_info_sum : 'n/a'})
                         </span>
                       </div>
 
@@ -1873,7 +1908,7 @@ export const StudioApp: React.FC = () => {
                           style={{
                             position: 'absolute',
                             left: 0,
-                            width: `${post.percentile}%`,
+                            width: `${Number.isFinite(pctVal) ? Math.max(0, Math.min(100, pctVal as number)) : 0}%`,
                             top: '2px',
                             bottom: '2px',
                             background: 'linear-gradient(90deg, #8b5cf6, #34d399)',
@@ -2130,6 +2165,40 @@ export const StudioApp: React.FC = () => {
                   DIF Audit: {morphPreviewResult.difNote}
                 </div>
               </div>
+            </div>
+
+            <div
+              id="studio-deconfounding-telemetry-bar"
+              className="mono"
+              style={{
+                marginTop: '10px',
+                padding: '8px 12px',
+                borderRadius: '10px',
+                background: 'rgba(0,0,0,0.32)',
+                border: '1px solid rgba(167, 139, 250, 0.28)',
+                fontSize: '10.5px',
+                color: 'var(--text-muted)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+                overflowWrap: 'anywhere',
+              }}
+            >
+              <span>
+                Telemetry Baseline: <strong style={{ color: '#c4b5fd' }}>{liveTelemetryProfile.minds_eye_label}</strong> ·{' '}
+                {liveTelemetryProfile.attentional_cadence_label} (RT CV{' '}
+                {Number.isFinite(liveTelemetryProfile.rt_cv_pct) ? `${liveTelemetryProfile.rt_cv_pct}%` : 'n/a'}) ·{' '}
+                {liveTelemetryProfile.pattern_memory_label}
+              </span>
+              <span>
+                14-Factor De-Confounding ({liveDeconfounding.active_adjustments.length} active ·{' '}
+                {liveDeconfounding.scale_bias_note}):{' '}
+                {DOMAIN_LIST.map((dk) => {
+                  const dv = liveDeconfounding.domain_deltas[dk];
+                  return `${dk}:${Number.isFinite(dv) ? (dv >= 0 ? `+${dv}%` : `${dv}%`) : 'n/a'}`;
+                }).join(' · ')}
+              </span>
             </div>
           </div>
 
@@ -2732,7 +2801,10 @@ export const StudioApp: React.FC = () => {
                             </span>
                           </div>
                           <span className="mono" style={{ color: 'var(--emerald)', fontWeight: 700 }}>
-                            {Math.round(drv.percentile)}% <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>±{drv.se}%</span>
+                            {Number.isFinite(drv.percentile) ? `${Math.round(drv.percentile)}%` : 'n/a'}{' '}
+                            <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+                              ±{Number.isFinite(drv.se) ? `${drv.se}%` : 'n/a'}
+                            </span>
                           </span>
                         </div>
                       ))}
@@ -2747,14 +2819,17 @@ export const StudioApp: React.FC = () => {
                         fontSize: '10.5px',
                       }}
                     >
-                      {(Object.keys(ASPECT_LABELS) as AspectKey[]).map((ak) => (
-                        <div key={ak} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>{ASPECT_LABELS[ak].short}:</span>
-                          <strong style={{ color: 'var(--sky)' }}>
-                            {Math.round(tiktokInverseResult.aspectScores[ak])}%
-                          </strong>
-                        </div>
-                      ))}
+                      {(Object.keys(ASPECT_LABELS) as AspectKey[]).map((ak) => {
+                        const aspVal = tiktokInverseResult.aspectScores?.[ak];
+                        return (
+                          <div key={ak} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>{ASPECT_LABELS[ak].short}:</span>
+                            <strong style={{ color: 'var(--sky)' }}>
+                              {Number.isFinite(aspVal) ? `${Math.round(aspVal)}%` : 'n/a'}
+                            </strong>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
