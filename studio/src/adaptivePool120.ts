@@ -2751,8 +2751,11 @@ export function computeLiveDomainPosteriors(
   const priorShift: Record<DomainKey, number> = { O: 0, C: 0, E: 0, A: 0, N: 0 };
   const priorWeight: Record<DomainKey, number> = { O: 0, C: 0, E: 0, A: 0, N: 0 };
 
-  if (userContext && typeof userContext === 'object') {
-    const deconf = compute14FactorDeconfounding(userContext, responses);
+  if (
+    (userContext && typeof userContext === 'object') ||
+    (telemetry && typeof telemetry === 'object')
+  ) {
+    const deconf = compute14FactorDeconfounding(userContext, responses, telemetry);
     for (const d of DOMAIN_KEYS) {
       const deltaPct = deconf.domain_deltas[d] || 0;
       if (Math.abs(deltaPct) >= 0.5) {

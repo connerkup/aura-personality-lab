@@ -117,6 +117,45 @@ def run_calibration_and_export() -> dict:
             f"est_irt_a={sh['estimated_irt_a']}, graduation_ready={sh['graduation_ready']}"
         )
 
+    # Invariant checks: Aphantasia monotonic bounds, Shadow zero-distortion, 3-layer decomposition
+    boosts = [engine._compute_aphantasia_boost(float(v)) for v in range(0, 101, 5)]
+    for v, b in zip(range(0, 101, 5), boosts):
+        if v <= 25:
+            assert 5.0 <= b <= 14.0, f"Aphantasia boost {b} out of [5,14] at vividness={v}"
+        else:
+            assert b == 0.0, f"Aphantasia boost must be 0 for vividness={v}, got {b}"
+    low = boosts[: 25 // 5 + 1]
+    assert all(low[i] >= low[i + 1] for i in range(len(low) - 1)), "Boost must be monotone non-increasing in vividness"
+    assert engine._compute_aphantasia_boost(-10.0) == 14.0 and engine._compute_aphantasia_boost(25.0) == 5.0
+    assert tp["aphantasia_openness_boost_pct"] == engine._compute_aphantasia_boost(10.0)
+    ctrl = engine.decompose_signal(
+        raw_scores={"O": 68.0, "C": 42.0, "E": 46.0, "A": 74.0, "N": 56.0},
+        mask_id="auto",
+        telemetry={**sample_telemetry, "minds_eye": {"imagery_vividness": 80.0, "inner_modality": "visual"}},
+    )
+    assert ctrl["telemetry_profile"]["aphantasia_openness_boost_pct"] == 0.0
+
+    shadow_ids = [
+        it["id"] for it in engine.item_bank_schema["items"]
+        if it.get("calibration_status") == "shadow_candidate" or it.get("layer") == "shadow_behavioral_probe"
+    ]
+    assert shadow_ids, "Item bank must contain shadow items"
+    anchor_resp = {str(it["id"]): 4 for it in engine.item_bank_schema["items"] if it["id"] not in shadow_ids}
+    base = engine.score_assessment(dict(anchor_resp))
+    for extreme in (1, 5):
+        with_shadow = engine.score_assessment({**anchor_resp, **{str(i): extreme for i in shadow_ids}})
+        assert with_shadow["raw_scores"] == base["raw_scores"], "Shadow items distorted anchor percentiles"
+        assert with_shadow["standard_errors"] == base["standard_errors"], "Shadow items distorted standard errors"
+        diags = with_shadow["shadow_item_diagnostics"]
+        assert len(diags) == len(shadow_ids)
+        assert all(d["anchor_weight_applied"] == 0.0 for d in diags)
+
+    layers = telemetry_run["signal_layers"]
+    for d in ("O", "C", "E", "A", "N"):
+        assert 0.0 <= layers["debiased_scores"][d] <= 100.0
+    assert set(depleted_run["signal_layers"]["state_halo_shift"]) == {"O", "C", "E", "A", "N"}
+    print("\n[Invariants] Aphantasia monotone bounds, shadow zero-distortion, 3-layer decomposition: PASS")
+
     # 4. Verify Oregon ESCS 80/20 Bidirectional Blind Holdout Benchmark
     oregon_matrix = export_oregon_escs_matrix_json()
     oregon_bench = engine.evaluate_oregon_blind_holdout_benchmark()

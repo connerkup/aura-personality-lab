@@ -3,16 +3,71 @@ Pydantic v2 Request & Response Schemas for Aura Tier-2 FastAPI Service & Kae's S
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, ConfigDict, Field
+import math
+from typing import Annotated, Any, Dict, List, Optional, Union
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+LikertScore = Annotated[float, Field(ge=1.0, le=5.0, allow_inf_nan=False)]
+DomainScore = Annotated[float, Field(ge=0.0, le=100.0, allow_inf_nan=False)]
+
+_NON_FINITE_TOKENS = {
+    "nan", "+nan", "-nan",
+    "inf", "+inf", "-inf",
+    "infinity", "+infinity", "-infinity",
+}
 
 
-class ScoreAssessmentRequest(BaseModel):
-    model_config = ConfigDict(extra="allow")
+def _ensure_finite_telemetry(value: Any, path: str = "telemetry", _depth: int = 0) -> Any:
+    if _depth > 64:
+        raise ValueError(f"Maximum telemetry nesting depth exceeded at {path}")
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        if (isinstance(value, float) and not math.isfinite(value)) or abs(value) > 1e6:
+            raise ValueError(f"Non-finite or out-of-range telemetry value at {path}")
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.lower() in _NON_FINITE_TOKENS:
+            raise ValueError(f"Non-finite string token in {path}")
+        try:
+            parsed = float(stripped)
+        except ValueError:
+            return value
+        except OverflowError as exc:
+            raise ValueError(f"Out-of-range numeric string in {path}") from exc
+        if not math.isfinite(parsed) or abs(parsed) > 1e6:
+            raise ValueError(f"Out-of-range numeric string in {path}")
+        return value
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _ensure_finite_telemetry(v, f"{path}.{k}", _depth + 1)
+        return value
+    if isinstance(value, (list, tuple)):
+        for idx, item in enumerate(value):
+            _ensure_finite_telemetry(item, f"{path}[{idx}]", _depth + 1)
+        return value
+    return value
 
+
+class _TelemetryValidatedModel(BaseModel):
+    model_config = ConfigDict(extra="allow", allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _validate_telemetry_and_extras(self) -> "_TelemetryValidatedModel":
+        for field_name in ("telemetry", "context_profile"):
+            payload = getattr(self, field_name, None)
+            if payload is not None:
+                _ensure_finite_telemetry(payload, field_name)
+        if self.__pydantic_extra__:
+            _ensure_finite_telemetry(self.__pydantic_extra__, "extra")
+        return self
+
+
+class ScoreAssessmentRequest(_TelemetryValidatedModel):
     user_name: Optional[str] = Field(default="Anonymous Explorer", description="Optional display name for saved session.")
     session_id: Optional[str] = Field(default=None, description="Optional existing session_id to update.")
-    responses: Dict[str, Union[int, float]] = Field(
+    responses: Dict[str, LikertScore] = Field(
         default_factory=dict,
         description="Map of question ID ('1'..'120') to Likert response (1..5).",
     )
@@ -22,10 +77,14 @@ class ScoreAssessmentRequest(BaseModel):
     )
     mood_energy: Optional[float] = Field(
         default=None,
+        ge=-1.0,
+        le=1.0,
         description="Optional override for allostatic mood energy in [-1.0, +1.0]. Inferred from Q12 when omitted.",
     )
     self_criticism: Optional[float] = Field(
         default=None,
+        ge=-1.0,
+        le=1.0,
         description="Optional override for self-criticism halo in [-1.0, +1.0]. Inferred from Q11/Q12 when omitted.",
     )
     telemetry: Optional[Dict[str, Any]] = Field(
@@ -34,17 +93,15 @@ class ScoreAssessmentRequest(BaseModel):
     )
 
 
-class DecomposeRequest(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    raw_scores: Dict[str, float] = Field(
+class DecomposeRequest(_TelemetryValidatedModel):
+    raw_scores: Dict[str, DomainScore] = Field(
         default_factory=lambda: {"O": 78.0, "C": 44.0, "E": 48.0, "A": 76.0, "N": 58.0},
         description="Raw observed Big Five domain percentiles (O, C, E, A, N in 0..100).",
     )
     mask_id: Optional[str] = Field(default="auto")
-    mood_energy: Optional[float] = Field(default=None)
-    self_criticism: Optional[float] = Field(default=None)
-    responses: Optional[Dict[str, Union[int, float]]] = Field(default=None)
+    mood_energy: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    self_criticism: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    responses: Optional[Dict[str, LikertScore]] = Field(default=None)
     telemetry: Optional[Dict[str, Any]] = Field(default=None)
 
 
@@ -73,15 +130,13 @@ class ContextProfilePayload(BaseModel):
     )
 
 
-class AdaptiveNextItemRequest(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
+class AdaptiveNextItemRequest(_TelemetryValidatedModel):
     answered_ids: List[int] = Field(default_factory=list, description="List of already-answered question IDs.")
-    current_scores: Optional[Dict[str, float]] = Field(
+    current_scores: Optional[Dict[str, DomainScore]] = Field(
         default=None,
         description="Optional domain percentile estimates (O, C, E, A, N in 0..100).",
     )
-    responses: Optional[Dict[str, Union[int, float]]] = Field(
+    responses: Optional[Dict[str, LikertScore]] = Field(
         default=None,
         description="Optional map of answered question IDs to Likert responses (1..5) for live 2PL IRT & conditional branch evaluation.",
     )

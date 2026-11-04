@@ -223,6 +223,7 @@ def get_science_pdf(domain_dir: str, filename: str) -> FileResponse:
 
 
 @app.post("/api/v1/assessment/score")
+@app.post("/api/v1/assess/score")
 def post_assessment_score(payload: ScoreAssessmentRequest) -> Dict[str, Any]:
     responses = {str(k): int(round(float(v))) for k, v in (payload.responses or {}).items()}
     mask_id = payload.mask_id or "auto"
@@ -257,6 +258,7 @@ def post_assessment_score(payload: ScoreAssessmentRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/v1/assessment/decompose")
+@app.post("/api/v1/assess/decompose")
 def post_assessment_decompose(payload: DecomposeRequest) -> Dict[str, Any]:
     responses = (
         {str(k): int(round(float(v))) for k, v in payload.responses.items()}
@@ -275,6 +277,7 @@ def post_assessment_decompose(payload: DecomposeRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/v1/assessment/next-item")
+@app.post("/api/v1/adaptive/next")
 @app.post("/api/v1/studio/adaptive/next-item")
 def post_assessment_next_item(payload: AdaptiveNextItemRequest) -> Dict[str, Any]:
     return ENGINE.select_next_adaptive_item(
