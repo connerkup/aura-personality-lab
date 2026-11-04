@@ -195,12 +195,14 @@ class NeuroPsychometricEngine:
         """
         Aphantasia De-Confounder Rule:
         When imagery_vividness <= 25, standard aesthetic/visual Openness items under-estimate
-        the user's true imaginative capacity by 12%–18% because they imagine via wordless
+        the user's true imaginative capacity by 5%–14% because they imagine via wordless
         conceptual/spatial models rather than V1 visual pictures.
+        Boost is 0.0 for imagery_vividness > 25; otherwise it scales monotonically (non-increasing
+        in vividness) from +5.0 at vividness=25 to +14.0 at vividness<=0 (clamped).
         """
         if imagery_vividness <= 25.0:
             v_clamped = max(0.0, min(25.0, float(imagery_vividness)))
-            return round(12.0 + 6.0 * ((25.0 - v_clamped) / 25.0), 1)
+            return round(5.0 + 9.0 * ((25.0 - v_clamped) / 25.0), 1)
         return 0.0
 
     def build_telemetry_profile(self, telemetry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -494,6 +496,18 @@ class NeuroPsychometricEngine:
             "shadow_item_diagnostics": shadow_item_diagnostics,
         }
 
+    def score_assessment(
+        self,
+        responses: Dict[str, int],
+        telemetry: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Primary scoring entry point. Shadow items (`shadow_candidate` status or
+        `shadow_behavioral_probe` layer) are reported with `anchor_weight_applied = 0.0`
+        and never influence anchor percentiles, Fisher information or standard errors.
+        """
+        return self.score_responses_irt(responses, telemetry=telemetry)
+
     def _evaluate_parent_trigger(
         self,
         parent_trigger: Optional[Dict[str, Any]],
@@ -651,10 +665,7 @@ class NeuroPsychometricEngine:
         if responses and isinstance(responses, dict):
             for k, v in responses.items():
                 if v is not None:
-                    try:
-                        clean_responses[str(int(k))] = int(round(float(v)))
-                    except Exception:
-                        pass
+                    clean_responses[str(int(k))] = int(round(float(v)))
 
         answered_set = set(int(x) for x in (answered_ids or []))
         for k in clean_responses.keys():
@@ -903,8 +914,8 @@ class NeuroPsychometricEngine:
         for qid in question_ids:
             try:
                 results.append(self.morph_question_context(int(qid), context_profile))
-            except Exception:
-                continue
+            except (KeyError, ValueError) as exc:
+                raise ValueError(f"Cannot contextualize question id {qid!r}: {exc}") from exc
         return {
             "count": len(results),
             "context_profile": context_profile or {},
@@ -1328,13 +1339,13 @@ class NeuroPsychometricEngine:
             if isinstance(resp, str):
                 try:
                     resp = json.loads(resp)
-                except Exception:
-                    resp = {}
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid session responses JSON: {exc}") from exc
             elif resp is None and "responses_json" in rec:
                 try:
                     resp = json.loads(rec["responses_json"])
-                except Exception:
-                    resp = {}
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid session responses JSON: {exc}") from exc
             if not isinstance(resp, dict) or not resp:
                 continue
 
@@ -1342,25 +1353,25 @@ class NeuroPsychometricEngine:
             if isinstance(tel, str):
                 try:
                     tel = json.loads(tel)
-                except Exception:
-                    tel = {}
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid session telemetry JSON: {exc}") from exc
             elif tel is None and "telemetry_json" in rec:
                 try:
                     tel = json.loads(rec["telemetry_json"])
-                except Exception:
-                    tel = {}
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid session telemetry JSON: {exc}") from exc
 
             scores = rec.get("debiased_scores") or rec.get("anchor_scores")
             if isinstance(scores, str):
                 try:
                     scores = json.loads(scores)
-                except Exception:
-                    scores = None
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid session scores JSON: {exc}") from exc
             elif scores is None and "debiased_scores_json" in rec:
                 try:
                     scores = json.loads(rec["debiased_scores_json"])
-                except Exception:
-                    scores = None
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid session scores JSON: {exc}") from exc
 
             irt_out = self.score_responses_irt(resp, telemetry=tel)
             anchor_raw = irt_out["raw_scores"]
@@ -2084,7 +2095,7 @@ class NeuroPsychometricEngine:
                         try:
                             f_v = float(low_s)
                             val = (f_v - 1.0) / 4.0 if f_v > 1.0 else float(np.clip(f_v, 0.0, 1.0))
-                        except Exception:
+                        except ValueError:
                             continue
                 else:
                     f_v = float(raw_v)
