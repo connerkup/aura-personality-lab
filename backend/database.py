@@ -659,6 +659,17 @@ def get_blind_prediction_verification_summary() -> Dict[str, Any]:
     }
 
 
+def _load_json_dict(raw: Optional[str]) -> Dict[str, Any]:
+    if raw is None or not str(raw).strip():
+        return {}
+    parsed = json.loads(raw)
+    if parsed is None:
+        return {}
+    if not isinstance(parsed, dict):
+        raise ValueError("Expected JSON object dictionary in session column")
+    return parsed
+
+
 def save_assessment_session(
     responses: Dict[str, Any],
     telemetry: Optional[Dict[str, Any]],
@@ -682,10 +693,10 @@ def save_assessment_session(
                 (
                     sid,
                     user_name,
-                    json.dumps(responses or {}),
-                    json.dumps(telemetry or {}),
+                    json.dumps(responses or {}, allow_nan=False),
+                    json.dumps(telemetry or {}, allow_nan=False),
                     inferred_mask_id,
-                    json.dumps(debiased_scores or {}),
+                    json.dumps(debiased_scores or {}, allow_nan=False),
                     now_str,
                 ),
             )
@@ -706,10 +717,10 @@ def get_assessment_session(session_id: str) -> Optional[Dict[str, Any]]:
         return {
             "session_id": row["id"],
             "user_name": row["user_name"],
-            "responses": json.loads(row["responses_json"]),
-            "telemetry": json.loads(row["telemetry_json"]),
+            "responses": _load_json_dict(row["responses_json"]),
+            "telemetry": _load_json_dict(row["telemetry_json"]),
             "inferred_mask_id": row["inferred_mask_id"],
-            "debiased_scores": json.loads(row["debiased_scores_json"]),
+            "debiased_scores": _load_json_dict(row["debiased_scores_json"]),
             "created_at": row["created_at"],
         }
     finally:
